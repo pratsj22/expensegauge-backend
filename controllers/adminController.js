@@ -1,0 +1,282 @@
+import bcrypt from 'bcrypt'
+import jwt from 'jsonwebtoken'
+import User from '../models/userModel.js'
+import mongoose from 'mongoose'
+import Expense from '../models/expenseModel.js'
+
+export const registerUser = async (req, res) => {
+    const { name, username, password } = req.body;
+    if (!name || !username || !password) return res.status(403).send("Please enter all details")
+    if (await User.findOne({ username })) {
+        return res.status(400).send({ "message": "Username already exists" })
+    }
+    const saltrounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltrounds);
+    const newuser = new User({
+        name,
+        username,
+        password: hashedPassword,
+        admin: req.userId,
+        netBalance: 0,
+        role: 'user'
+    })
+    await newuser.save();
+
+    return res.status(200).send({id:newuser._id,createdAt:newuser.createdAt})
+}
+
+
+export const verifyAdminAccess = (req, res, next) => {
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer '))
+        return res.sendStatus(401);
+
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jwt.verify(token, process.env.ACCESS_SECRET);
+
+        if (decoded.role !== 'admin') return res.sendStatus(403)
+        req.userId = decoded.userId;
+        next();
+    } catch (err) {
+        return res.sendStatus(401); // Token expired/invalid
+    }
+};
+
+export const deleteUser = async (req, res) => {
+    const { userId } = req.params;
+
+    try {
+        await Expense.deleteMany({ userId }); // Delete all expenses for the user
+        const user= await User.findById(userId)
+        await User.findByIdAndUpdate(req.userId,{ $inc: { netBalance: -(user.netBalance) } },)
+        const deletedUser = await User.findByIdAndDelete(userId); // Then delete the user
+        if (!deletedUser) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        res.status(200).json({ message: 'User deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Error deleting user' });
+    }
+}
+
+export const assignBalance = async (req, res) => {
+    const { amount, date, details } = req.body;
+    const userId = req.params.userId;
+    console.log(userId);
+
+    console.log("enter assign balance");
+
+    if (!userId)
+        return res.sendStatus(405)
+    if (!amount || !date || !details) {
+        return res.status(403).send("Please provide all the details")
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount)) {
+        return res.status(400).send("Amount must be a valid number");
+    }
+
+    // Start a transaction (optional but safer for consistency)
+    const session = await Expense.startSession();
+    session.startTransaction();
+
+    try {
+        // Save expense
+        const expense = new Expense({
+            userId,
+            details: details,
+            amount: parsedAmount,
+            type: 'assign',
+            date,
+        });
+
+        await expense.save({ session });
+
+        // Update user's net balance
+        await User.findByIdAndUpdate(
+            userId,
+            { $inc: { netBalance: parsedAmount } },
+            { session }
+        );
+
+        await User.findByIdAndUpdate(
+            req.userId,
+            { $inc: { netBalance: parsedAmount } },
+            { session }
+        );
+
+        // Commit transaction
+        await session.commitTransaction();
+        session.endSession();
+        return res.status(200).send(expense);
+    } catch (innerError) {
+        await session.abortTransaction();
+        session.endSession();
+        console.error(innerError);
+        return res.status(500).send("Failed to save expense and update balance");
+    }
+
+}
+
+export const getAllUsers = async (req, res) => {
+    try {
+        const offset = parseInt(req.query.offset) || 0;
+        const limit = parseInt(req.query.limit) || 10;
+
+        const users = await User.aggregate([
+            { $match: { admin: mongoose.Types.ObjectId.createFromHexString(req.userId) } },
+            { $sort: { createdAt: -1 } },   // optional: show latest users first
+            { $skip: offset },
+            { $limit: limit },
+            {
+                $lookup: {
+                    from: 'expenses',
+                    let: { userId: '$_id' },
+                    pipeline: [
+                        { $match: { $expr: { $eq: ['$userId', '$$userId'] } } },
+                        { $sort: { date: -1 } },
+                        { $limit: 10 }
+                    ],
+                    as: 'expenses'
+                }
+            },
+            {
+                $project: {
+                    password: 0,
+                    refreshTokens: 0,
+                    updatedAt: 0,
+                    username: 0,
+                    __v: 0,
+                    admin: 0,
+                    role: 0
+                }
+            }
+        ]);
+        const totalCount = await User.countDocuments({ admin: req.userId });
+        const hasMore = offset + users.length < totalCount;
+        const admin = await User.findById(req.userId)
+
+        return res.status(200).json({
+            users,
+            totalUserBalance: admin.netBalance,
+            hasMore,
+        });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Error getting all users' });
+    }
+}
+
+export const removeUserExpense = async (req, res) => {
+    try {
+        const id = req.params.id
+        const userId = req.params.userId
+        const expense = await Expense.findById(id)
+        const parsedAmount = expense.amount
+        const signedAmount = -parsedAmount;
+        // Start a transaction (optional but safer for consistency)
+        const session = await Expense.startSession();
+        session.startTransaction();
+        try {
+
+            await Expense.findByIdAndDelete(id, { session })
+
+            await User.findByIdAndUpdate(
+                req.userId,
+                { $inc: { netBalance: signedAmount } },
+                { session }
+            );
+
+            await User.findByIdAndUpdate(
+                userId,
+                { $inc: { netBalance: signedAmount } },
+                { session }
+            );
+            // Commit transaction
+            await session.commitTransaction();
+            session.endSession();
+
+            return res.sendStatus(200)
+        }
+        catch (error) {
+            console.log(error);
+
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(500).send("Could not delete expense")
+        }
+    } catch (error) {
+        console.log(error);
+
+        return res.status(500).send("Could not delete expense")
+    }
+}
+
+export const edituserExpense = async (req, res) => {
+    try {
+        const id = req.params.id
+        const userId = req.params.userId
+        const { amount, details, date } = req.body
+        const expense = await Expense.findById(id)
+        const session = await Expense.startSession();
+        session.startTransaction();
+
+        try {
+            if (parseFloat(amount) !== expense.amount) {
+                const signedAmount = parseFloat(amount) - expense.amount
+                await User.findByIdAndUpdate(
+                    req.userId,
+                    { $inc: { netBalance: signedAmount } },
+                    { session }
+                );
+                await User.findByIdAndUpdate(
+                    userId,
+                    { $inc: { netBalance: signedAmount } },
+                    { session }
+                );
+                console.log("updating",amount);
+                
+            }
+            await Expense.findByIdAndUpdate(id, { amount, details, date }, { session });
+            // Commit transaction
+            await session.commitTransaction();
+            session.endSession();
+            return res.sendStatus(200)
+        } catch (error) {
+            await session.abortTransaction();
+            session.endSession();
+            return res.status(500).send("Could not edit expense")
+        }
+    } catch (error) {
+        return res.status(500).send("Could not edit expense")
+    }
+}
+
+export const getUserExpenses = async (req, res) => {
+    const userId = req.params.userId;
+    console.log("enter", req.query.offset, req.query.limit);
+    const offset = parseInt(req.query.offset) || 0;
+    const limit = parseInt(req.query.limit) || 10;
+
+    if (!userId) {
+        return res.status(400).json({ message: 'User ID is required' });
+    }
+
+    const expenses = await Expense.find({ userId })
+        .sort({ date: -1 })
+        .skip(offset)
+        .limit(limit);
+
+    const totalCount = await Expense.countDocuments({ userId });
+    const hasMore = offset + expenses.length < totalCount;
+
+    return res.status(200).json({
+        expenses,
+        hasMore,
+    });
+}
+
+

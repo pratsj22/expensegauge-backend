@@ -1,0 +1,16 @@
+import mongoose from 'mongoose';
+
+const expenseSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  details: { type: String, required: true },
+  amount: { type: Number, required: true },
+  type: {
+    type: String,
+    required: true,
+    enum: ['credit', 'debit','assign'],
+  },
+  category: { type: String },
+  date: { type: String, required: true },
+}, { timestamps: true });
+
+export default mongoose.model('expenses', expenseSchema);
