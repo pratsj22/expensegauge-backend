@@ -111,7 +111,7 @@ export const assignBalance = async (req, res) => {
         // Commit transaction
         await session.commitTransaction();
         session.endSession();
-        return res.status(200).send(expense);
+        return res.status(200).send({ "id": expense._id });
     } catch (innerError) {
         await session.abortTransaction();
         session.endSession();

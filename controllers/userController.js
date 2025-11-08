@@ -1,18 +1,32 @@
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import User from '../models/userModel.js'
+import dotenv from 'dotenv'
+import nodemailer from 'nodemailer'
+dotenv.config()
+
+
+// Configure Nodemailer (add your email service details to .env)
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
+
 
 export const signup = async (req, res) => {
-    const { name, username, password, role } = req.body;
-    if( !name || !username || !password || ! role) return res.status(403).send("Please enter all details")
-    if (await User.findOne({ username })) {
-        return res.status(400).send({ "message": "Username already exists" })
+    const { name, email, password, role } = req.body;
+    if (!name || !email || !password || !role) return res.status(403).send("Please enter all details")
+    if (await User.findOne({ email })) {
+        return res.status(400).send({ "message": "Email already exists" })
     }
     const saltrounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltrounds);
     const newuser = new User({
         name,
-        username,
+        email,
         password: hashedPassword,
         role
     })
@@ -29,21 +43,21 @@ export const signup = async (req, res) => {
     newuser.refreshTokens.push({ token: refreshToken });
     await newuser.save();
 
-    return res.status(200).send({ accessToken, refreshToken })
+    return res.status(200).send({ accessToken, refreshToken, name: newuser.name, role: newuser.role })
 }
 
 export const login = async (req, res) => {
-    const { username, password } = req.body;
-    if( !username || !password ) return res.status(403).send("Please enter all details")
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(403).send("Please enter all details")
 
 
-    const user = await User.findOne({ username })
+    const user = await User.findOne({ email })
     if (!user) {
         return res.status(404).send({ "message": "User does not exist" })
     }
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
-        return res.status(401).send({"code": "INVALID_PASSWORD", "message": "Invalid username or password" })
+        return res.status(401).send({ "code": "INVALID_PASSWORD", "message": "Invalid email or password" })
     }
     const accessToken = jwt.sign(
         { userId: user._id, role: user.role },
@@ -61,13 +75,12 @@ export const login = async (req, res) => {
     }
     await user.save();
 
-    return res.status(200).send({ accessToken, refreshToken, name:user.name,role:user.role })
+    return res.status(200).send({ accessToken, refreshToken, name: user.name, role: user.role })
 }
 
 export const verifyAccess = (req, res, next) => {
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer '))
-        return res.sendStatus(401);
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return res.sendStatus(401);
 
     const token = authHeader.split(' ')[1];
     try {
@@ -84,8 +97,7 @@ export const refresh = async (req, res) => {
     const { refreshToken } = req.body;
     console.log("enter refresh");
 
-    if (!refreshToken)
-        return res.sendStatus(401);
+    if (!refreshToken) return res.sendStatus(401);
 
     try {
         const decoded = jwt.verify(refreshToken, process.env.REFRESH_SECRET);
@@ -110,7 +122,7 @@ export const refresh = async (req, res) => {
         await user.save();
 
         const newAccessToken = jwt.sign(
-            { userId: user._id,role:user.role },
+            { userId: user._id, role: user.role },
             process.env.ACCESS_SECRET,
             { expiresIn: '15m' }
         );
@@ -121,24 +133,121 @@ export const refresh = async (req, res) => {
     }
 }
 
-export const changePassword=async(req,res)=>{
+export const requestPasswordResetOTP = async (req, res) => {
+    const { email } = req.body;
+    if (!email) {
+        return res.status(400).json({ message: 'Please provide an email.' });
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'User with that email does not exist.' });
+        }
+
+        const otp = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+        user.otp = otp;
+        user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // OTP valid for 10 minutes
+        await user.save();
+
+        const mailOptions = {
+            from: {
+                name: "ExpenseGauge",
+                address: process.env.EMAIL_USER,
+            },
+            to: user.email,
+            subject: "ExpenseGauge Password Reset OTP",
+
+            text: `Hello ${user.name},
+
+            Your OTP for password reset is: ${otp}
+            This OTP is valid for 10 minutes.
+
+            If you did not request this, please ignore this email.
+
+            Best regards,
+            The ExpenseGauge Team`,
+
+            html: `
+            <div style="font-family: Arial, sans-serif; background-color: #f7f9fb; padding: 20px;">
+                <div style="max-width: 500px; background: #ffffff; border-radius: 10px; margin: auto; box-shadow: 0 2px 6px rgba(0,0,0,0.1); overflow: hidden;">
+                <div style="background-color: #3a6df0; padding: 20px; text-align: center;">
+                    <img src="https://expensegauge.vercel.app/icon2.png" alt="ExpenseGauge Logo" width="80" height="auto" />
+                    <h2 style="color: white; margin: 10px 0 0;">ExpenseGauge</h2>
+                </div>
+                <div style="padding: 25px; color: #333;">
+                    <p>Hello <b>${user.name}</b>,</p>
+                    <p>Your One-Time Password (OTP) for resetting your ExpenseGauge password is:</p>
+                    <p style="font-size: 22px; color: #3a6df0; font-weight: bold; letter-spacing: 2px;">${otp}</p>
+                    <p>This OTP is valid for <b>10 minutes</b>.</p>
+                    <p>If you did not request this, please ignore this email.</p>
+                    <p style="margin-top: 25px;">Best regards,<br><b>The ExpenseGauge Team</b></p>
+                </div>
+                <div style="background: #f0f3fa; text-align: center; padding: 10px; font-size: 12px; color: #777;">
+                    © ${new Date().getFullYear()} ExpenseGauge. All rights reserved.
+                </div>
+                </div>
+            </div>
+  `,};
+
+        await transporter.sendMail(mailOptions);
+        res.status(200).json({ message: 'OTP sent to your email address.' });
+    } catch (error) {
+        console.error('Request password reset OTP error:', error);
+        res.status(500).json({ message: 'Error sending OTP. Please try again later.' });
+    }
+};
+
+export const resetPassword = async (req, res) => {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+        return res.status(400).json({ message: 'Please provide all required fields.' });
+    }
+
+    try {
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+
+        if (user.otp !== otp || user.otpExpires < new Date()) {
+            return res.status(400).json({ message: 'Invalid or expired OTP.' });
+        }
+        if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword) || !/[^A-Za-z0-9]/.test(newPassword)) {
+            return res.status(400).json({ message: 'Password does not meet policy requirements.' });
+        }
+
+        const saltrounds = 10;
+        user.password = await bcrypt.hash(newPassword, saltrounds);
+        user.otp = undefined; // Clear OTP after successful reset
+        user.otpExpires = undefined;
+        await user.save();
+
+        res.status(200).json({ message: 'Password reset successfully.' });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ message: 'Internal server error.' });
+    }
+};
+
+export const changePassword = async (req, res) => {
     try {
         console.log("enter change");
-        
-        const{ oldPassword,newPassword}= req.body;
+
+        const { oldPassword, newPassword } = req.body;
         const user = await User.findById(req.userId);
         if (!user) {
             return res.status(404).send({ "message": "User does not exist" })
         }
         const passwordMatch = await bcrypt.compare(oldPassword, user.password);
         if (!passwordMatch) {
-            return res.status(401).send({"code": "INVALID_CURRENT_PASSWORD", "message": "Invalid old password" })
+            return res.status(401).send({ "code": "INVALID_CURRENT_PASSWORD", "message": "Invalid old password" })
         }
         const saltrounds = 10;
         const hashedNewPassword = await bcrypt.hash(newPassword, saltrounds);
-        user.password= hashedNewPassword;
+        user.password = hashedNewPassword;
         await user.save();
-        
+
         return res.status(200).json({ message: 'Password changed successfully' });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });

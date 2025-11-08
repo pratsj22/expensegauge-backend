@@ -2,20 +2,18 @@ import express from 'express'
 import userRoute from './routes/userRoute.js'
 import expenseRoute from './routes/expenseRoute.js'
 import adminRoute from './routes/adminRoute.js'
-import { configDotenv } from 'dotenv'
 import cors from 'cors'
-import { connectDB } from './config/dbConnection.js'
 import { verifyAccess } from './controllers/userController.js'
+import { connectDB } from './config/dbConnection.js'
 import { verifyAdminAccess } from './controllers/adminController.js'
 
-configDotenv()
 connectDB()
 const app=express()
 app.use(express.json())
 const port=process.env.PORT || 3000
 
 app.use(cors({
-    origin:'http://localhost:8081',
+    origin:'*',
     credentials:true
 }))
 

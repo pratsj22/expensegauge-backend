@@ -14,7 +14,7 @@ export const addExpense = async (req, res) => {
         if (isNaN(parsedAmount)) {
             return res.status(400).send("Amount must be a valid number");
         }
-
+        await new Promise(resolve => setTimeout(resolve, 50000));
         // Calculate signed amount
         const signedAmount = type === 'credit' ? parsedAmount : -parsedAmount;
 

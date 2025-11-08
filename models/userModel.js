@@ -6,10 +6,13 @@ const userSchema = new mongoose.Schema({
         required: true,
         trim: true,
     },
-    username: {
+    email: {
         type: String,
         required: true,
         unique: true,
+        trim: true,
+        lowercase: true,
+        match: [/^\S+@\S+\.\S+$/, 'Please use a valid email address.']
     },
     password: {
         type: String,
@@ -27,7 +30,9 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
-    refreshTokens: [{ token: String }]
+    refreshTokens: [{ token: String }],
+    otp: String,
+    otpExpires: Date,
 }, { timestamps: true })
 
 export default mongoose.model("users", userSchema)
