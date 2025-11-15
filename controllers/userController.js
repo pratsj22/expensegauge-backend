@@ -3,7 +3,10 @@ import jwt from 'jsonwebtoken'
 import User from '../models/userModel.js'
 import dotenv from 'dotenv'
 import nodemailer from 'nodemailer'
+import { OAuth2Client } from "google-auth-library"
+import crypto from 'crypto';
 dotenv.config()
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 
 // Configure Nodemailer (add your email service details to .env)
@@ -77,6 +80,78 @@ export const login = async (req, res) => {
 
     return res.status(200).send({ accessToken, refreshToken, name: user.name, role: user.role })
 }
+
+
+export const googleAuth = async (req, res) => {
+    try {
+        const { idToken } = req.body;
+
+        if (!idToken)
+            return res.status(400).json({ message: "Missing Google token" });
+
+        // Verify Google token
+        const ticket = await client.verifyIdToken({
+            idToken,
+            audience: process.env.GOOGLE_CLIENT_ID,
+        });
+
+        const payload = ticket.getPayload();
+        const email = payload.email;
+        const name = payload.name;
+        const picture = payload.picture;
+
+        // Find or Create user
+        let user = await User.findOne({ email });
+
+        if (!user) {
+
+            const fakePassword = crypto.randomBytes(32).toString("hex");
+            const hashedPassword = await bcrypt.hash(fakePassword, 10);
+
+            user = await User.create({
+                name,
+                email,
+                password: hashedPassword, // required by schema
+                role: "user",
+                provider: "google",
+            });
+        }
+
+        // Generate Access Token
+        const accessToken = jwt.sign(
+            { userId: user._id, role: user.role },
+            process.env.ACCESS_SECRET,
+            { expiresIn: "1h" }
+        );
+
+        // Generate Refresh Token
+        const refreshToken = jwt.sign(
+            { userId: user._id },
+            process.env.REFRESH_SECRET,
+            { expiresIn: "30d" }
+        );
+
+        user.refreshTokens.push({ token: refreshToken });
+        if (user.refreshTokens.length > 5) {
+            user.refreshTokens.shift(); // remove oldest
+        }
+
+        await user.save();
+
+        res.status(200).json({
+            accessToken,
+            refreshToken,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+        });
+
+    } catch (err) {
+        console.error("GOOGLE AUTH ERROR:", err);
+        res.status(401).json({ message: "Invalid Google token" });
+    }
+};
+
 
 export const verifyAccess = (req, res, next) => {
     const authHeader = req.headers.authorization;
@@ -188,7 +263,8 @@ export const requestPasswordResetOTP = async (req, res) => {
                 </div>
                 </div>
             </div>
-  `,};
+  `,
+        };
 
         await transporter.sendMail(mailOptions);
         res.status(200).json({ message: 'OTP sent to your email address.' });

@@ -14,7 +14,6 @@ export const addExpense = async (req, res) => {
         if (isNaN(parsedAmount)) {
             return res.status(400).send("Amount must be a valid number");
         }
-        await new Promise(resolve => setTimeout(resolve, 50000));
         // Calculate signed amount
         const signedAmount = type === 'credit' ? parsedAmount : -parsedAmount;
 
@@ -31,7 +30,7 @@ export const addExpense = async (req, res) => {
                 type,
                 category,
                 date,
-            });
+            }); 
 
             await expense.save({ session });
 
@@ -54,6 +53,8 @@ export const addExpense = async (req, res) => {
             // Commit transaction
             await session.commitTransaction();
             session.endSession();
+            console.log("Expenseeeses");
+            
 
             return res.status(200).send({ "id": expense._id });
         } catch (innerError) {
@@ -156,7 +157,6 @@ export const editExpense = async (req, res) => {
 
 export const getExpenses = async (req, res) => {
     const userId = req.userId;
-    console.log("enter", req.query.offset, req.query.limit);
     const offset = parseInt(req.query.offset) || 0;
     const limit = parseInt(req.query.limit) || 10;
 
