@@ -17,7 +17,7 @@ app.use(cors({
     credentials:true
 }))
 
-app.get('/',(req,res)=>{
+app.get('/api/v1/health',(req,res)=>{
     res.send("ExpenseGauge server working fine")
 })
 app.use('/api/v1/user',userRoute)
