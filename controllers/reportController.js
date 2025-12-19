@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import nodemailer from 'nodemailer';
+import { sendEmail } from '../utils/emailService.js';
 import Expense from '../models/expenseModel.js';
 import User from '../models/userModel.js';
 
@@ -213,19 +213,13 @@ export const generateReport = async (req, res) => {
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', async () => {
             const pdfData = Buffer.concat(buffers);
-            const transporter = nodemailer.createTransport({
-                service: 'gmail',
-                auth: { user: process.env.EMAIL_USER, pass: process.env.EMAIL_PASS }
-            });
-            const mailOptions = {
-                from: process.env.EMAIL_USER,
-                to: user.email,
-                subject: `ExpenseGauge Report - ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`,
-                text: `Attached is your expense report.`,
-                attachments: [{ filename: `report.pdf`, content: pdfData }]
-            };
             try {
-                await transporter.sendMail(mailOptions);
+                await sendEmail({
+                    to: user.email,
+                    subject: `ExpenseGauge Report - ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`,
+                    text: `Attached is your expense report.`,
+                    attachments: [{ filename: `report.pdf`, content: pdfData }]
+                });
                 res.status(200).send({ message: "Report sent" });
             } catch (error) {
                 console.error("Email error:", error);

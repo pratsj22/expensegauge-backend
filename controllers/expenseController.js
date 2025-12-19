@@ -30,7 +30,7 @@ export const addExpense = async (req, res) => {
                 type,
                 category,
                 date,
-            }); 
+            });
 
             await expense.save({ session });
 
@@ -54,7 +54,7 @@ export const addExpense = async (req, res) => {
             await session.commitTransaction();
             session.endSession();
             console.log("Expenseeeses");
-            
+
 
             return res.status(200).send({ "id": expense._id });
         } catch (innerError) {
@@ -80,13 +80,13 @@ export const removeExpense = async (req, res) => {
         try {
 
             await Expense.findByIdAndDelete(id, { session })
-            
+
             const user = await User.findByIdAndUpdate(
                 req.userId,
                 { $inc: { netBalance: signedAmount } },
                 { session }
             );
-            
+
             // 3. If user has an admin, update their balance too
             if (user.admin) {
                 await User.findByIdAndUpdate(
@@ -98,19 +98,19 @@ export const removeExpense = async (req, res) => {
             // Commit transaction
             await session.commitTransaction();
             session.endSession();
-            
+
             return res.sendStatus(200)
         }
-        catch (error){
+        catch (error) {
             console.log(error);
-            
+
             await session.abortTransaction();
             session.endSession();
             return res.status(500).send("Could not delete expense")
         }
     } catch (error) {
         console.log(error);
-        
+
         return res.status(500).send("Could not delete expense")
     }
 }
@@ -125,7 +125,13 @@ export const editExpense = async (req, res) => {
 
         try {
             if (parseFloat(amount) !== expense.amount) {
-                const signedAmount = parseFloat(amount) - expense.amount
+                let signedAmount = 0
+                if (expense.type === 'debit') {
+                    signedAmount = expense.amount - parseFloat(amount)
+                } else {
+                    signedAmount = parseFloat(amount) - expense.amount
+                }
+
                 const user = await User.findByIdAndUpdate(
                     req.userId,
                     { $inc: { netBalance: signedAmount } },
@@ -165,16 +171,16 @@ export const getExpenses = async (req, res) => {
     }
 
     const expenses = await Expense.find({ userId })
-        .sort({ date: -1,createdAt:-1 })
+        .sort({ date: -1, createdAt: -1 })
         .skip(offset)
         .limit(limit);
-    const user= await User.findById(userId)
+    const user = await User.findById(userId)
     const totalCount = await Expense.countDocuments({ userId });
     const hasMore = offset + expenses.length < totalCount;
 
     return res.status(200).json({
         expenses,
-        totalBalance:user.netBalance,
+        totalBalance: user.netBalance,
         hasMore,
     });
 }

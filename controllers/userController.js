@@ -2,21 +2,14 @@ import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import User from '../models/userModel.js'
 import dotenv from 'dotenv'
-import nodemailer from 'nodemailer'
+import { sendEmail } from '../utils/emailService.js'
 import { OAuth2Client } from "google-auth-library"
 import crypto from 'crypto';
 dotenv.config()
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 
-// Configure Nodemailer (add your email service details to .env)
-const transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-    },
-});
+// Configure Resend (moved to utils/emailService.js)
 
 
 export const signup = async (req, res) => {
@@ -225,14 +218,9 @@ export const requestPasswordResetOTP = async (req, res) => {
         user.otpExpires = new Date(Date.now() + 10 * 60 * 1000); // OTP valid for 10 minutes
         await user.save();
 
-        const mailOptions = {
-            from: {
-                name: "ExpenseGauge",
-                address: process.env.EMAIL_USER,
-            },
+        await sendEmail({
             to: user.email,
             subject: "ExpenseGauge Password Reset OTP",
-
             text: `Hello ${user.name},
 
             Your OTP for password reset is: ${otp}
@@ -242,7 +230,6 @@ export const requestPasswordResetOTP = async (req, res) => {
 
             Best regards,
             The ExpenseGauge Team`,
-
             html: `
             <div style="font-family: Arial, sans-serif; background-color: #f7f9fb; padding: 20px;">
                 <div style="max-width: 500px; background: #ffffff; border-radius: 10px; margin: auto; box-shadow: 0 2px 6px rgba(0,0,0,0.1); overflow: hidden;">
@@ -264,9 +251,7 @@ export const requestPasswordResetOTP = async (req, res) => {
                 </div>
             </div>
   `,
-        };
-
-        await transporter.sendMail(mailOptions);
+        });
         res.status(200).json({ message: 'OTP sent to your email address.' });
     } catch (error) {
         console.error('Request password reset OTP error:', error);
