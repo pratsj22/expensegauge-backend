@@ -5,16 +5,16 @@ import mongoose from 'mongoose'
 import Expense from '../models/expenseModel.js'
 
 export const registerUser = async (req, res) => {
-    const { name, username, password } = req.body;
-    if (!name || !username || !password) return res.status(403).send("Please enter all details")
-    if (await User.findOne({ username })) {
-        return res.status(400).send({ "message": "Username already exists" })
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) return res.status(403).send("Please enter all details")
+    if (await User.findOne({ email })) {
+        return res.status(400).send({ "message": "Email already exists" })
     }
     const saltrounds = 10;
     const hashedPassword = await bcrypt.hash(password, saltrounds);
     const newuser = new User({
         name,
-        username,
+        email,
         password: hashedPassword,
         admin: req.userId,
         netBalance: 0,
@@ -22,7 +22,8 @@ export const registerUser = async (req, res) => {
     })
     await newuser.save();
 
-    return res.status(200).send({id:newuser._id,createdAt:newuser.createdAt})
+    return res.status(200).send({ id: newuser._id, createdAt: newuser.createdAt })
+
 }
 
 
@@ -49,8 +50,8 @@ export const deleteUser = async (req, res) => {
 
     try {
         await Expense.deleteMany({ userId }); // Delete all expenses for the user
-        const user= await User.findById(userId)
-        await User.findByIdAndUpdate(req.userId,{ $inc: { netBalance: -(user.netBalance) } },)
+        const user = await User.findById(userId)
+        await User.findByIdAndUpdate(req.userId, { $inc: { netBalance: -(user.netBalance) } },)
         const deletedUser = await User.findByIdAndDelete(userId); // Then delete the user
         if (!deletedUser) {
             return res.status(404).json({ message: 'User not found' });
@@ -237,8 +238,8 @@ export const edituserExpense = async (req, res) => {
                     { $inc: { netBalance: signedAmount } },
                     { session }
                 );
-                console.log("updating",amount);
-                
+                console.log("updating", amount);
+
             }
             await Expense.findByIdAndUpdate(id, { amount, details, date }, { session });
             // Commit transaction

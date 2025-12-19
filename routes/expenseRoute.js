@@ -1,11 +1,13 @@
 import express from 'express'
 import { addExpense, editExpense, getExpenses, removeExpense } from '../controllers/expenseController.js'
+import { generateReport } from '../controllers/reportController.js'
 
-const router= express.Router()
+const router = express.Router()
 
-router.post('/add',addExpense)
-router.get('/get-expense/',getExpenses)
-router.delete('/:id',removeExpense)
-router.patch('/:id',editExpense)
+router.post('/add', addExpense)
+router.get('/get-expense/', getExpenses)
+router.delete('/:id', removeExpense)
+router.patch('/:id', editExpense)
+router.post('/report/generate', generateReport)
 
 export default router
