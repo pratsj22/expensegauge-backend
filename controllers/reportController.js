@@ -24,17 +24,19 @@ const COLORS = {
 };
 
 const CATEGORY_STYLES = {
-    'Income': { bg: '#D1FAE5', text: '#065F46' },
-    'Food': { bg: '#DBEAFE', text: '#1E40AF' },
-    'Transport': { bg: '#E0E7FF', text: '#3730A3' },
-    'Housing': { bg: '#FEE2E2', text: '#991B1B' },
-    'Utilities': { bg: '#FEF3C7', text: '#92400E' },
-    'Entertainment': { bg: '#F3E8FF', text: '#6B21A8' },
-    'Health': { bg: '#DCFCE7', text: '#166534' },
-    'Other': { bg: '#F3F4F6', text: '#374151' }
+    'Income': { bg: '#D1FAE5', text: '#065F46', chart: '#10B981' }, // Emerald 500
+    'Groceries': { bg: '#ECFCCB', text: '#365314', chart: '#84CC16' }, // Lime 500
+    'Healthcare': { bg: '#FEE2E2', text: '#991B1B', chart: '#EF4444' }, // Red 500
+    'Food & Dining': { bg: '#DBEAFE', text: '#1E40AF', chart: '#3B82F6' }, // Blue 500
+    'Bills & Utilities': { bg: '#FEF3C7', text: '#92400E', chart: '#F59E0B' }, // Amber 500
+    'Entertainment': { bg: '#F3E8FF', text: '#6B21A8', chart: '#A855F7' }, // Purple 500
+    'Transport': { bg: '#E0E7FF', text: '#3730A3', chart: '#6366F1' }, // Indigo 500
+    'Education': { bg: '#FFEDD5', text: '#9A3412', chart: '#F97316' }, // Orange 500
+    'Shopping': { bg: '#FCE7F3', text: '#9D174D', chart: '#EC4899' }, // Pink 500
+    'Other': { bg: '#F3F4F6', text: '#374151', chart: '#9CA3AF' }  // Gray 400
 };
 
-const LOGO_PATH = path.join(process.cwd(), 'backend', 'assets', 'logo.png');
+const LOGO_PATH = path.join(process.cwd(), 'assets', 'logo.png');
 
 // --- Helper Functions (Exported for Testing) ---
 
@@ -191,7 +193,6 @@ export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) =>
 
     const total = Object.values(categoryData).reduce((a, b) => a + b, 0);
     if (total === 0) return;
-    const colors = ['#4F46E5', '#10B981', '#F59E0B', '#3B82F6', '#EC4899', '#EF4444', '#8B5CF6'];
 
     let startAngle = 0;
     const sortedCats = Object.entries(categoryData).sort((a, b) => b[1] - a[1]);
@@ -206,10 +207,11 @@ export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) =>
         const y2 = centerY + radius * Math.sin(endAngle);
 
         const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
+        const style = CATEGORY_STYLES[cat] || CATEGORY_STYLES['Other'];
 
         doc.save()
             .path(`M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`)
-            .fill(colors[i % colors.length]);
+            .fill(style.chart);
 
         startAngle = endAngle;
     });
@@ -218,9 +220,10 @@ export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) =>
 
     // Legend
     let legendY = y + 45;
-    sortedCats.slice(0, 6).forEach(([cat, amount], i) => {
+    sortedCats.forEach(([cat, amount], i) => {
         const percentage = Math.round((amount / total) * 100);
-        doc.circle(x + 145, legendY + 5, 3.5).fill(colors[i % colors.length]);
+        const style = CATEGORY_STYLES[cat] || CATEGORY_STYLES['Other'];
+        doc.circle(x + 145, legendY + 5, 3.5).fill(style.chart);
         doc.fillColor(COLORS.primary).font('Helvetica').fontSize(8.5).text(cat, x + 158, legendY);
         doc.fillColor(COLORS.secondary).text(`${percentage}%`, x + 230, legendY, { align: 'right', width: 25 });
         legendY += 18;
@@ -228,8 +231,8 @@ export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) =>
 };
 
 export const drawTransactionTable = (doc, expenses, startY) => {
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(14).text('Transaction History', 50, startY);
-    let y = startY + 30;
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(14).text('Transaction History', 50, startY+10);
+    let y = startY + 40;
 
     drawRoundedRect(doc, 50, y, 500, 30, 5, COLORS.bg);
     doc.fillColor(COLORS.secondary).font('Helvetica-Bold').fontSize(9);
@@ -238,7 +241,7 @@ export const drawTransactionTable = (doc, expenses, startY) => {
     doc.text('Category', 340, y + 10);
     doc.text('Amount', 480, y + 10, { width: 50, align: 'right' });
 
-    y += 35;
+    y += 40;
     expenses.forEach((exp) => {
         if (y > 740) {
             doc.addPage();
@@ -249,7 +252,7 @@ export const drawTransactionTable = (doc, expenses, startY) => {
             doc.text('Description', 160, 60);
             doc.text('Category', 340, 60);
             doc.text('Amount', 480, 60, { width: 50, align: 'right' });
-            y = 85;
+            y = 90;
         }
         const isIncome = exp.type === 'credit' || exp.type === 'assign';
         const color = isIncome ? COLORS.income : COLORS.primary;
@@ -261,7 +264,7 @@ export const drawTransactionTable = (doc, expenses, startY) => {
         drawPill(doc, 340, y + 5, exp.category || 'Other', catStyle);
         doc.fillColor(color).font('Helvetica-Bold').fontSize(8.5).text(`${prefix}$${exp.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 450, y, { width: 80, align: 'right' });
         doc.moveTo(50, y + 20).lineTo(550, y + 20).strokeColor(COLORS.border).lineWidth(0.5).stroke();
-        y += 30;
+        y += 35;
     });
 };
 
