@@ -18,7 +18,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 export const sendEmail = async ({ to, subject, text, html, attachments }) => {
     try {
         const data = await resend.emails.send({
-            from: 'ExpenseGauge <' + process.env.EMAIL_USER + '>', // You might want to change this later
+            from: 'ExpenseGauge <onboarding@resend.dev>', // You might want to change this later
             to: [to],
             subject: subject,
             text: text,

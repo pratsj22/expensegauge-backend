@@ -2,155 +2,243 @@ import PDFDocument from 'pdfkit';
 import { sendEmail } from '../utils/emailService.js';
 import Expense from '../models/expenseModel.js';
 import User from '../models/userModel.js';
+import path from 'path';
 
-// --- Helper Functions for PDF Drawing ---
+// --- Constants & Styles ---
 
 const COLORS = {
-    primary: '#4F46E5', // Indigo
-    success: '#10B981', // Green
-    danger: '#EF4444',  // Red
-    dark: '#1F2937',    // Gray-800
-    light: '#F3F4F6',   // Gray-100
+    primary: '#111827',   // Slate 900
+    secondary: '#6B7280', // Gray 500
+    accent: '#4F46E5',    // Indigo 600
+    income: '#059669',    // Emerald 600
+    incomeBG: '#ECFDF5',  // Emerald 50
+    expense: '#DC2626',   // Red 600
+    expenseBG: '#FEF2F2', // Red 50
+    balance: '#2563EB',   // Blue 600
+    balanceBG: '#EFF6FF', // Blue 50
+    border: '#E5E7EB',    // Gray 200
     white: '#FFFFFF',
-    text: '#374151'
+    bg: '#F9FAFB',        // Gray 50
+    chartGrid: '#F3F4F6'  // Gray 100
 };
 
-const drawHeader = (doc, user, type, startDate, endDate) => {
-    // Logo / Brand
-    doc.fillColor(COLORS.primary).fontSize(24).font('Helvetica-Bold').text('ExpenseGauge', 50, 50);
+const CATEGORY_STYLES = {
+    'Income': { bg: '#D1FAE5', text: '#065F46' },
+    'Food': { bg: '#DBEAFE', text: '#1E40AF' },
+    'Transport': { bg: '#E0E7FF', text: '#3730A3' },
+    'Housing': { bg: '#FEE2E2', text: '#991B1B' },
+    'Utilities': { bg: '#FEF3C7', text: '#92400E' },
+    'Entertainment': { bg: '#F3E8FF', text: '#6B21A8' },
+    'Health': { bg: '#DCFCE7', text: '#166534' },
+    'Other': { bg: '#F3F4F6', text: '#374151' }
+};
 
-    // Title
-    doc.fillColor(COLORS.dark).fontSize(16).text(`${type ? type.charAt(0).toUpperCase() + type.slice(1) : 'Expense'} Report`, 50, 85);
+// --- Helper Functions ---
 
-    // Date Range
-    const dateText = `${startDate.toDateString()} - ${endDate.toDateString()}`;
-    doc.fontSize(10).fillColor(COLORS.text).text(dateText, 50, 105);
+const drawRoundedRect = (doc, x, y, width, height, radius, fill, stroke) => {
+    doc.save();
+    if (fill) doc.fillColor(fill).roundedRect(x, y, width, height, radius).fill();
+    if (stroke) doc.strokeColor(stroke).lineWidth(1).roundedRect(x, y, width, height, radius).stroke();
+    doc.restore();
+};
 
-    // User Info
-    doc.text(`Generated for: ${user.name} (${user.email})`, 50, 120);
+const drawPill = (doc, x, y, text, style) => {
+    const paddingH = 8;
+    const paddingV = 4;
+    doc.font('Helvetica').fontSize(8);
+    const textWidth = doc.widthOfString(text);
+    const width = textWidth + (paddingH * 2);
+    const height = 16;
 
-    // Line Separator
-    doc.moveTo(50, 140).lineTo(550, 140).strokeColor(COLORS.light).stroke();
+    drawRoundedRect(doc, x, y - 10, width, height, 8, style.bg);
+    doc.fillColor(style.text).text(text, x + paddingH, y - 6);
+    return width;
+};
+
+const drawHeader = (doc, user, startDate, endDate) => {
+    // Logo (Simulated Logo with Shape/Text if file not found)
+    // In a real app, you'd use: doc.image('path/to/logo.png', 50, 45, { width: 40 });
+    const logoX = 50;
+    const logoY = 40;
+    drawRoundedRect(doc, logoX, logoY, 40, 40, 8, '#84CC16'); // Green Square Logo
+    doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(20).text('EG', logoX + 6, logoY + 12);
+
+    // Report Period (Top Right)
+    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text('REPORT PERIOD', 400, 45, { align: 'right', width: 150 });
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(11).text(`${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, 400, 58, { align: 'right', width: 150 });
+
+    // Main Title
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(28).text('Expense Analysis', 50, 100);
+    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(11).text('Prepared for: ', 50, 135, { continued: true });
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').text(user.name);
+
+    doc.moveTo(50, 165).lineTo(550, 165).strokeColor(COLORS.border).lineWidth(0.5).stroke();
 };
 
 const drawSummaryCards = (doc, income, expense, balance) => {
-    const y = 160;
-    const padding = 10;
-    const cardWidth = 150;
-    const height = 60;
+    const y = 185;
+    const cardWidth = 155;
+    const height = 80;
+    const gap = 15;
 
-    // Income
-    doc.roundedRect(50, y, cardWidth, height, 5).fill(COLORS.light);
-    doc.fillColor(COLORS.success).fontSize(10).text('TOTAL INCOME', 60, y + 10);
-    doc.fillColor(COLORS.success).fontSize(16).font('Helvetica-Bold').text(`+${income.toLocaleString('en-IN')}`, 60, y + 25);
+    // Total Expenses
+    drawRoundedRect(doc, 50, y, cardWidth, height, 10, COLORS.white, COLORS.border);
+    doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('TOTAL EXPENSES', 75, y + 20);
+    doc.fillColor(COLORS.primary).fontSize(20).font('Helvetica-Bold').text(`$${expense.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 75, y + 38);
 
-    // Expense
-    doc.roundedRect(225, y, cardWidth, height, 5).fill(COLORS.light);
-    doc.fillColor(COLORS.danger).fontSize(10).font('Helvetica').text('TOTAL EXPENSE', 235, y + 10);
-    doc.fillColor(COLORS.danger).fontSize(16).font('Helvetica-Bold').text(`-${expense.toLocaleString('en-IN')}`, 235, y + 25);
+    // Total Income
+    drawRoundedRect(doc, 50 + cardWidth + gap, y, cardWidth, height, 10, COLORS.white, COLORS.border);
+    doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('TOTAL INCOME', 50 + cardWidth + gap + 25, y + 20);
+    doc.fillColor(COLORS.balance).fontSize(20).font('Helvetica-Bold').text(`$${income.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 50 + cardWidth + gap + 25, y + 38);
 
-    // Balance
-    doc.roundedRect(400, y, cardWidth, height, 5).fill(COLORS.primary);
-    doc.fillColor(COLORS.white).fontSize(10).font('Helvetica').text('NET SAVINGS', 410, y + 10);
-    doc.fillColor(COLORS.white).fontSize(16).font('Helvetica-Bold').text(`${balance.toLocaleString('en-IN')}`, 410, y + 25);
+    // Net Balance
+    drawRoundedRect(doc, 50 + (cardWidth + gap) * 2, y, cardWidth, height, 10, COLORS.white, COLORS.border);
+    doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('NET BALANCE', 50 + (cardWidth + gap) * 2 + 25, y + 20);
+    const balanceColor = balance >= 0 ? COLORS.income : COLORS.expense;
+    const balancePrefix = balance >= 0 ? '+' : '';
+    doc.fillColor(balanceColor).fontSize(20).font('Helvetica-Bold').text(`${balancePrefix}$${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 50 + (cardWidth + gap) * 2 + 25, y + 38);
 };
 
-const drawPieChart = (doc, categoryData, x, y, radius) => {
-    let startAngle = 0;
-    const total = Object.values(categoryData).reduce((a, b) => a + b, 0);
-    const colors = ['#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#6366F1', '#14B8A6'];
+const drawSpendingTrend = (doc, expenses, x, y, width, height) => {
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(12).text('Spending Trend', x, y);
+    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(9).text('Daily expenses over the period', x, y + 15);
 
-    let i = 0;
-    if (total === 0) {
-        doc.fillColor(COLORS.light).circle(x, y, radius).fill();
+    const chartY = y + 40;
+    const chartHeight = height - 40;
+
+    // Draw Border
+    drawRoundedRect(doc, x, chartY, width, chartHeight, 10, COLORS.white, COLORS.border);
+
+    // Mock Data Processing for Trend
+    const dailyData = {};
+    expenses.filter(e => e.type === 'debit').forEach(e => {
+        const d = new Date(e.date).getDate();
+        dailyData[d] = (dailyData[d] || 0) + e.amount;
+    });
+
+    const days = Object.keys(dailyData).sort((a, b) => a - b);
+    if (days.length < 2) {
+        doc.fillColor(COLORS.secondary).fontSize(10).text('Not enough data for trend', x + width / 2 - 60, chartY + chartHeight / 2);
         return;
     }
 
-    doc.font('Helvetica-Bold').fontSize(12).fillColor(COLORS.dark).text('Category Breakdown', x - 50, y - radius - 20);
+    const maxVal = Math.max(...Object.values(dailyData), 10);
+    const stepX = (width - 40) / (days.length - 1);
 
-    // Legend
-    let legendY = y - radius + 10;
+    // Grid / Line
+    doc.save();
+    doc.translate(x + 20, chartY + chartHeight - 20);
 
-    Object.entries(categoryData).forEach(([cat, amount]) => {
-        const angle = (amount / total) * Math.PI * 2;
-        const endAngle = startAngle + angle;
-
-        doc.path(`M ${x} ${y} L ${x + radius * Math.cos(startAngle)} ${y + radius * Math.sin(startAngle)} A ${radius} ${radius} 0 ${angle > Math.PI ? 1 : 0} 1 ${x + radius * Math.cos(endAngle)} ${y + radius * Math.sin(endAngle)} Z`)
-            .fill(colors[i % colors.length]);
-
-        // Draw Legend
-        doc.rect(x + radius + 20, legendY, 10, 10).fill(colors[i % colors.length]);
-        doc.fillColor(COLORS.text).fontSize(10).font('Helvetica').text(`${cat}: ${Math.round((amount / total) * 100)}%`, x + radius + 35, legendY);
-        legendY += 15;
-
-        startAngle = endAngle;
-        i++;
+    // Path for Area
+    doc.moveTo(0, 0);
+    days.forEach((day, i) => {
+        const vx = i * stepX;
+        const vy = -(dailyData[day] / maxVal) * (chartHeight - 60);
+        doc.lineTo(vx, vy);
     });
+    doc.lineTo((days.length - 1) * stepX, 0);
+    doc.closePath();
+    doc.fillColor(COLORS.balanceBG).fill();
+
+    // Path for Line
+    doc.moveTo(0, -(dailyData[days[0]] / maxVal) * (chartHeight - 60));
+    days.forEach((day, i) => {
+        const vx = i * stepX;
+        const vy = -(dailyData[day] / maxVal) * (chartHeight - 60);
+        doc.lineTo(vx, vy);
+    });
+    doc.strokeColor(COLORS.balance).lineWidth(2).stroke();
+    doc.restore();
 };
 
-const drawBarChart = (doc, expenses, x, y, width, height) => {
-    // Group by date (last 7 days logic or simple daily grouping)
-    // For simplicity, let's take aggregated daily totals
-    const dailyData = {};
-    expenses.forEach(e => {
-        const d = new Date(e.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
-        if (!dailyData[d]) dailyData[d] = 0;
-        if (e.type === 'debit') dailyData[d] += e.amount;
+const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) => {
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(12).text('Category Breakdown', x, y);
+    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(9).text('Where your money went', x, y + 15);
+
+    const radius = 60;
+    const centerX = x + 70;
+    const centerY = y + 90;
+    const innerRadius = 35;
+
+    const total = Object.values(categoryData).reduce((a, b) => a + b, 0);
+    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899', '#EF4444'];
+
+    let startAngle = 0;
+    Object.entries(categoryData).sort((a, b) => b[1] - a[1]).forEach(([cat, amount], i) => {
+        const sliceAngle = (amount / total) * 2 * Math.PI;
+        const endAngle = startAngle + sliceAngle;
+
+        const x1 = centerX + radius * Math.cos(startAngle);
+        const y1 = centerY + radius * Math.sin(startAngle);
+        const x2 = centerX + radius * Math.cos(endAngle);
+        const y2 = centerY + radius * Math.sin(endAngle);
+
+        const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
+
+        doc.save()
+            .path(`M ${centerX} ${centerY} L ${x1} ${y1} A ${radius} ${radius} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`)
+            .fill(colors[i % colors.length]);
+
+        startAngle = endAngle;
     });
 
-    const dates = Object.keys(dailyData).slice(-7); // Show max 7 bars
-    const values = dates.map(d => dailyData[d]);
-    const maxVal = Math.max(...values, 10);
+    // Inner Circle for Donut
+    doc.circle(centerX, centerY, innerRadius).fill(COLORS.white);
 
-    doc.font('Helvetica-Bold').fontSize(12).fillColor(COLORS.dark).text('Daily Spending Trend (Last 7 Active Days)', x, y - 20);
-
-    doc.strokeColor(COLORS.light).moveTo(x, y + height).lineTo(x + width, y + height).stroke(); // X Axis
-    doc.moveTo(x, y).lineTo(x, y + height).stroke(); // Y Axis
-
-    const barWidth = (width / dates.length) - 10;
-
-    dates.forEach((date, index) => {
-        const val = dailyData[date];
-        const barHeight = (val / maxVal) * height;
-        const currentX = x + 10 + (index * (width / dates.length));
-        const currentY = y + height - barHeight;
-
-        doc.rect(currentX, currentY, barWidth, barHeight).fill(COLORS.danger);
-        doc.fillColor(COLORS.text).fontSize(8).text(date, currentX, y + height + 5, { width: barWidth, align: 'center' });
+    // Legend
+    let legendY = y + 50;
+    Object.entries(categoryData).sort((a, b) => b[1] - a[1]).slice(0, 5).forEach(([cat, amount], i) => {
+        const percentage = Math.round((amount / total) * 100);
+        doc.circle(x + 160, legendY + 5, 4).fill(colors[i % colors.length]);
+        doc.fillColor(COLORS.primary).font('Helvetica').fontSize(9).text(cat, x + 175, legendY);
+        doc.fillColor(COLORS.secondary).text(`${percentage}%`, x + 250, legendY, { align: 'right', width: 30 });
+        legendY += 20;
     });
 };
 
 const drawTransactionTable = (doc, expenses, startY) => {
-    let y = startY;
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(14).text('Transaction History', 50, startY);
+
+    let y = startY + 30;
 
     // Header
-    doc.fillColor(COLORS.light).rect(50, y, 500, 20).fill();
-    doc.fillColor(COLORS.text).font('Helvetica-Bold').fontSize(10);
-    doc.text('Date', 60, y + 5);
-    doc.text('Category', 150, y + 5);
-    doc.text('Details', 260, y + 5);
-    doc.text('Amount', 480, y + 5);
+    drawRoundedRect(doc, 50, y, 500, 30, 5, COLORS.bg);
+    doc.fillColor(COLORS.secondary).font('Helvetica-Bold').fontSize(9);
+    doc.text('Date', 70, y + 10);
+    doc.text('Description', 160, y + 10);
+    doc.text('Category', 340, y + 10);
+    doc.text('Amount', 480, y + 10, { width: 50, align: 'right' });
 
-    y += 25;
-    doc.font('Helvetica').fontSize(10);
+    y += 35;
 
     expenses.forEach((exp, index) => {
-        if (y > 700) { // New Page
+        if (y > 720) {
             doc.addPage();
             y = 50;
         }
 
-        const color = exp.type === 'debit' ? COLORS.danger : COLORS.success;
-        const prefix = exp.type === 'debit' ? '-' : '+';
+        const isIncome = exp.type === 'credit' || exp.type === 'assign';
+        const color = isIncome ? COLORS.income : COLORS.primary;
+        const prefix = isIncome ? '+' : '-';
+        const catStyle = CATEGORY_STYLES[exp.category] || CATEGORY_STYLES['Other'];
 
-        doc.fillColor(COLORS.text).text(new Date(exp.date).toLocaleDateString(), 60, y);
-        doc.fillColor(COLORS.text).text(exp.category || 'General', 150, y);
-        doc.fillColor(COLORS.text).text(exp.details.substring(0, 30), 260, y);
-        doc.fillColor(color).text(`${prefix}${exp.amount}`, 480, y);
+        doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(9).text(new Date(exp.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }), 70, y);
+        doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(9).text(exp.details.substring(0, 30), 160, y);
 
-        doc.moveTo(50, y + 15).lineTo(550, y + 15).strokeColor(COLORS.light).stroke();
-        y += 20;
+        drawPill(doc, 340, y + 5, exp.category || 'Other', catStyle);
+
+        doc.fillColor(color).font('Helvetica-Bold').fontSize(9).text(`${prefix}$${exp.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 450, y, { width: 80, align: 'right' });
+
+        doc.moveTo(50, y + 20).lineTo(550, y + 20).strokeColor(COLORS.border).lineWidth(0.5).stroke();
+        y += 35;
     });
+};
+
+const drawFooter = (doc, pageNum) => {
+    const y = 780;
+    doc.moveTo(50, y - 10).lineTo(550, y - 10).strokeColor(COLORS.border).lineWidth(0.5).stroke();
+    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text(`Generated on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, 50, y);
+    doc.text(`Page 1 of 1`, 500, y, { align: 'right' });
 };
 
 // --- Main Controller ---
@@ -167,24 +255,17 @@ export const generateReport = async (req, res) => {
         let endDate = new Date();
 
         if (type === 'monthly') {
-            startDate.setMonth(now.getMonth() - 1);
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         } else if (type === 'weekly') {
             startDate.setDate(now.getDate() - 7);
         } else if (type === 'yearly') {
-            startDate.setFullYear(now.getFullYear() - 1);
+            startDate = new Date(now.getFullYear(), 0, 1);
         } else if (type === 'custom') {
             if (req.body.startDate) startDate = new Date(req.body.startDate);
             if (req.body.endDate) endDate = new Date(req.body.endDate);
         } else {
             startDate.setMonth(now.getMonth() - 1);
-        }
-
-        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-            return res.status(400).send("Invalid date format");
-        }
-
-        if (startDate > endDate) {
-            return res.status(400).send("Start date must be before end date");
         }
 
         const expenses = await Expense.find({
@@ -203,12 +284,11 @@ export const generateReport = async (req, res) => {
         const categoryData = {};
         expenses.filter(e => e.type === 'debit').forEach(e => {
             const cat = e.category || 'Other';
-            if (!categoryData[cat]) categoryData[cat] = 0;
-            categoryData[cat] += e.amount;
+            categoryData[cat] = (categoryData[cat] || 0) + e.amount;
         });
 
         // --- PDF Generation ---
-        const doc = new PDFDocument({ margin: 50 });
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
         let buffers = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', async () => {
@@ -216,9 +296,9 @@ export const generateReport = async (req, res) => {
             try {
                 await sendEmail({
                     to: user.email,
-                    subject: `ExpenseGauge Report - ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`,
-                    text: `Attached is your expense report.`,
-                    attachments: [{ filename: `report.pdf`, content: pdfData }]
+                    subject: `ExpenseGauge Analysis - ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`,
+                    text: `Attached is your detailed expense analysis report.`,
+                    attachments: [{ filename: `Expense_Analysis_${type || 'Report'}.pdf`, content: pdfData }]
                 });
                 res.status(200).send({ message: "Report sent" });
             } catch (error) {
@@ -227,14 +307,14 @@ export const generateReport = async (req, res) => {
             }
         });
 
-        drawHeader(doc, user, type || 'Custom', startDate, endDate);
+        drawHeader(doc, user, startDate, endDate);
         drawSummaryCards(doc, income, expenseTotal, savings);
 
-        // Layout: Pie Char Left, Bar Chart Right? Or stacked.
-        drawPieChart(doc, categoryData, 100, 320, 70);
-        drawBarChart(doc, expenses, 300, 250, 200, 120);
+        drawSpendingTrend(doc, expenses, 50, 285, 250, 180);
+        drawCategoryBreakdown(doc, categoryData, 320, 285, 230, 180);
 
-        drawTransactionTable(doc, expenses, 420);
+        drawTransactionTable(doc, expenses, 490);
+        drawFooter(doc, 1);
 
         doc.end();
 
