@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import { sendEmail } from '../utils/emailService.js';
 import Expense from '../models/expenseModel.js';
 import User from '../models/userModel.js';
+import fs from 'fs';
 import path from 'path';
 
 // --- Constants & Styles ---
@@ -33,16 +34,18 @@ const CATEGORY_STYLES = {
     'Other': { bg: '#F3F4F6', text: '#374151' }
 };
 
-// --- Helper Functions ---
+const LOGO_PATH = path.join(process.cwd(), 'backend', 'assets', 'logo.png');
 
-const drawRoundedRect = (doc, x, y, width, height, radius, fill, stroke) => {
+// --- Helper Functions (Exported for Testing) ---
+
+export const drawRoundedRect = (doc, x, y, width, height, radius, fill, stroke) => {
     doc.save();
     if (fill) doc.fillColor(fill).roundedRect(x, y, width, height, radius).fill();
     if (stroke) doc.strokeColor(stroke).lineWidth(1).roundedRect(x, y, width, height, radius).stroke();
     doc.restore();
 };
 
-const drawPill = (doc, x, y, text, style) => {
+export const drawPill = (doc, x, y, text, style) => {
     const paddingH = 8;
     const paddingV = 4;
     doc.font('Helvetica').fontSize(8);
@@ -55,19 +58,29 @@ const drawPill = (doc, x, y, text, style) => {
     return width;
 };
 
-const drawHeader = (doc, user, startDate, endDate) => {
-    // Logo (Simulated Logo with Shape/Text if file not found)
-    // In a real app, you'd use: doc.image('path/to/logo.png', 50, 45, { width: 40 });
+export const drawHeader = (doc, user, startDate, endDate) => {
     const logoX = 50;
     const logoY = 40;
-    drawRoundedRect(doc, logoX, logoY, 40, 40, 8, '#84CC16'); // Green Square Logo
-    doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(20).text('EG', logoX + 6, logoY + 12);
 
-    // Report Period (Top Right)
+    // Logo PNG Integration
+    if (fs.existsSync(LOGO_PATH)) {
+        try {
+            doc.image(LOGO_PATH, logoX, logoY, { height: 40 });
+        } catch (err) {
+            console.error('Error drawing logo image:', err);
+            // Fallback
+            drawRoundedRect(doc, logoX, logoY, 40, 40, 8, '#84CC16');
+            doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(20).text('EG', logoX + 6, logoY + 12);
+        }
+    } else {
+        // Fallback Green Square Logo
+        drawRoundedRect(doc, logoX, logoY, 40, 40, 8, '#84CC16');
+        doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(20).text('EG', logoX + 6, logoY + 12);
+    }
+
     doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text('REPORT PERIOD', 400, 45, { align: 'right', width: 150 });
     doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(11).text(`${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, 400, 58, { align: 'right', width: 150 });
 
-    // Main Title
     doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(28).text('Expense Analysis', 50, 100);
     doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(11).text('Prepared for: ', 50, 135, { continued: true });
     doc.fillColor(COLORS.primary).font('Helvetica-Bold').text(user.name);
@@ -75,23 +88,20 @@ const drawHeader = (doc, user, startDate, endDate) => {
     doc.moveTo(50, 165).lineTo(550, 165).strokeColor(COLORS.border).lineWidth(0.5).stroke();
 };
 
-const drawSummaryCards = (doc, income, expense, balance) => {
+export const drawSummaryCards = (doc, income, expense, balance) => {
     const y = 185;
     const cardWidth = 155;
     const height = 80;
     const gap = 15;
 
-    // Total Expenses
     drawRoundedRect(doc, 50, y, cardWidth, height, 10, COLORS.white, COLORS.border);
     doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('TOTAL EXPENSES', 75, y + 20);
     doc.fillColor(COLORS.primary).fontSize(20).font('Helvetica-Bold').text(`$${expense.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 75, y + 38);
 
-    // Total Income
     drawRoundedRect(doc, 50 + cardWidth + gap, y, cardWidth, height, 10, COLORS.white, COLORS.border);
     doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('TOTAL INCOME', 50 + cardWidth + gap + 25, y + 20);
     doc.fillColor(COLORS.balance).fontSize(20).font('Helvetica-Bold').text(`$${income.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 50 + cardWidth + gap + 25, y + 38);
 
-    // Net Balance
     drawRoundedRect(doc, 50 + (cardWidth + gap) * 2, y, cardWidth, height, 10, COLORS.white, COLORS.border);
     doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('NET BALANCE', 50 + (cardWidth + gap) * 2 + 25, y + 20);
     const balanceColor = balance >= 0 ? COLORS.income : COLORS.expense;
@@ -99,72 +109,94 @@ const drawSummaryCards = (doc, income, expense, balance) => {
     doc.fillColor(balanceColor).fontSize(20).font('Helvetica-Bold').text(`${balancePrefix}$${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 50 + (cardWidth + gap) * 2 + 25, y + 38);
 };
 
-const drawSpendingTrend = (doc, expenses, x, y, width, height) => {
+export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType) => {
     doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(12).text('Spending Trend', x, y);
-    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(9).text('Daily expenses over the period', x, y + 15);
+    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text(reportType === 'yearly' ? 'Monthly summary over year' : reportType === 'monthly' ? 'Weekly summary over month' : 'Daily expenses over week', x, y + 15);
 
     const chartY = y + 40;
     const chartHeight = height - 40;
-
-    // Draw Border
     drawRoundedRect(doc, x, chartY, width, chartHeight, 10, COLORS.white, COLORS.border);
 
-    // Mock Data Processing for Trend
-    const dailyData = {};
+    // Dynamic Grouping
+    const groupedData = {};
     expenses.filter(e => e.type === 'debit').forEach(e => {
-        const d = new Date(e.date).getDate();
-        dailyData[d] = (dailyData[d] || 0) + e.amount;
+        const date = new Date(e.date);
+        let key;
+        if (reportType === 'yearly') {
+            key = date.toLocaleString('default', { month: 'short' });
+        } else if (reportType === 'monthly') {
+            const weekNum = Math.ceil(date.getDate() / 7);
+            key = `W${weekNum}`;
+        } else {
+            key = date.getDate().toString();
+        }
+        groupedData[key] = (groupedData[key] || 0) + e.amount;
     });
 
-    const days = Object.keys(dailyData).sort((a, b) => a - b);
-    if (days.length < 2) {
-        doc.fillColor(COLORS.secondary).fontSize(10).text('Not enough data for trend', x + width / 2 - 60, chartY + chartHeight / 2);
+    const labels = Object.keys(groupedData).sort((a, b) => {
+        if (reportType === 'yearly') {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            return months.indexOf(a) - months.indexOf(b);
+        }
+        return a.localeCompare(b, undefined, { numeric: true });
+    });
+
+    if (labels.length < 2) {
+        doc.fillColor(COLORS.secondary).fontSize(10).text('Insufficient data for trend', x + width / 2 - 60, chartY + chartHeight / 2);
         return;
     }
 
-    const maxVal = Math.max(...Object.values(dailyData), 10);
-    const stepX = (width - 40) / (days.length - 1);
+    const values = labels.map(l => groupedData[l]);
+    const maxVal = Math.max(...values, 10);
+    const stepX = (width - 40) / (labels.length - 1);
 
-    // Grid / Line
     doc.save();
     doc.translate(x + 20, chartY + chartHeight - 20);
 
-    // Path for Area
+    const points = labels.map((l, i) => ({
+        x: i * stepX,
+        y: -(groupedData[l] / maxVal) * (chartHeight - 60)
+    }));
+
+    // Area
     doc.moveTo(0, 0);
-    days.forEach((day, i) => {
-        const vx = i * stepX;
-        const vy = -(dailyData[day] / maxVal) * (chartHeight - 60);
-        doc.lineTo(vx, vy);
-    });
-    doc.lineTo((days.length - 1) * stepX, 0);
+    points.forEach(p => doc.lineTo(p.x, p.y));
+    doc.lineTo(points[points.length - 1].x, 0);
     doc.closePath();
     doc.fillColor(COLORS.balanceBG).fill();
 
-    // Path for Line
-    doc.moveTo(0, -(dailyData[days[0]] / maxVal) * (chartHeight - 60));
-    days.forEach((day, i) => {
-        const vx = i * stepX;
-        const vy = -(dailyData[day] / maxVal) * (chartHeight - 60);
-        doc.lineTo(vx, vy);
+    // Line
+    doc.moveTo(points[0].x, points[0].y);
+    points.forEach(p => doc.lineTo(p.x, p.y));
+    doc.strokeColor(COLORS.balance).lineWidth(1.5).stroke();
+
+    // Labels
+    doc.font('Helvetica').fontSize(7).fillColor(COLORS.secondary);
+    labels.forEach((l, i) => {
+        if (labels.length > 12 && i % 2 !== 0) return; // Sparse labels for large data
+        doc.text(l, i * stepX - 10, 5, { width: 20, align: 'center' });
     });
-    doc.strokeColor(COLORS.balance).lineWidth(2).stroke();
+
     doc.restore();
 };
 
-const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) => {
+export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) => {
     doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(12).text('Category Breakdown', x, y);
-    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(9).text('Where your money went', x, y + 15);
+    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text('Where your money went', x, y + 15);
 
-    const radius = 60;
-    const centerX = x + 70;
+    const radius = 55;
+    const centerX = x + 65;
     const centerY = y + 90;
-    const innerRadius = 35;
+    const innerRadius = 42;
 
     const total = Object.values(categoryData).reduce((a, b) => a + b, 0);
-    const colors = ['#3B82F6', '#10B981', '#F59E0B', '#6366F1', '#EC4899', '#EF4444'];
+    if (total === 0) return;
+    const colors = ['#4F46E5', '#10B981', '#F59E0B', '#3B82F6', '#EC4899', '#EF4444', '#8B5CF6'];
 
     let startAngle = 0;
-    Object.entries(categoryData).sort((a, b) => b[1] - a[1]).forEach(([cat, amount], i) => {
+    const sortedCats = Object.entries(categoryData).sort((a, b) => b[1] - a[1]);
+
+    sortedCats.forEach(([cat, amount], i) => {
         const sliceAngle = (amount / total) * 2 * Math.PI;
         const endAngle = startAngle + sliceAngle;
 
@@ -182,26 +214,23 @@ const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) => {
         startAngle = endAngle;
     });
 
-    // Inner Circle for Donut
     doc.circle(centerX, centerY, innerRadius).fill(COLORS.white);
 
     // Legend
-    let legendY = y + 50;
-    Object.entries(categoryData).sort((a, b) => b[1] - a[1]).slice(0, 5).forEach(([cat, amount], i) => {
+    let legendY = y + 45;
+    sortedCats.slice(0, 6).forEach(([cat, amount], i) => {
         const percentage = Math.round((amount / total) * 100);
-        doc.circle(x + 160, legendY + 5, 4).fill(colors[i % colors.length]);
-        doc.fillColor(COLORS.primary).font('Helvetica').fontSize(9).text(cat, x + 175, legendY);
-        doc.fillColor(COLORS.secondary).text(`${percentage}%`, x + 250, legendY, { align: 'right', width: 30 });
-        legendY += 20;
+        doc.circle(x + 145, legendY + 5, 3.5).fill(colors[i % colors.length]);
+        doc.fillColor(COLORS.primary).font('Helvetica').fontSize(8.5).text(cat, x + 158, legendY);
+        doc.fillColor(COLORS.secondary).text(`${percentage}%`, x + 230, legendY, { align: 'right', width: 25 });
+        legendY += 18;
     });
 };
 
-const drawTransactionTable = (doc, expenses, startY) => {
+export const drawTransactionTable = (doc, expenses, startY) => {
     doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(14).text('Transaction History', 50, startY);
-
     let y = startY + 30;
 
-    // Header
     drawRoundedRect(doc, 50, y, 500, 30, 5, COLORS.bg);
     doc.fillColor(COLORS.secondary).font('Helvetica-Bold').fontSize(9);
     doc.text('Date', 70, y + 10);
@@ -210,35 +239,47 @@ const drawTransactionTable = (doc, expenses, startY) => {
     doc.text('Amount', 480, y + 10, { width: 50, align: 'right' });
 
     y += 35;
-
-    expenses.forEach((exp, index) => {
-        if (y > 720) {
+    expenses.forEach((exp) => {
+        if (y > 740) {
             doc.addPage();
-            y = 50;
+            // Redraw Header for next page
+            drawRoundedRect(doc, 50, 50, 500, 30, 5, COLORS.bg);
+            doc.fillColor(COLORS.secondary).font('Helvetica-Bold').fontSize(9);
+            doc.text('Date', 70, 60);
+            doc.text('Description', 160, 60);
+            doc.text('Category', 340, 60);
+            doc.text('Amount', 480, 60, { width: 50, align: 'right' });
+            y = 85;
         }
-
         const isIncome = exp.type === 'credit' || exp.type === 'assign';
         const color = isIncome ? COLORS.income : COLORS.primary;
         const prefix = isIncome ? '+' : '-';
         const catStyle = CATEGORY_STYLES[exp.category] || CATEGORY_STYLES['Other'];
 
-        doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(9).text(new Date(exp.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }), 70, y);
-        doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(9).text(exp.details.substring(0, 30), 160, y);
-
+        doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8.5).text(new Date(exp.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }), 70, y);
+        doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(8.5).text(exp.details.substring(0, 32), 160, y);
         drawPill(doc, 340, y + 5, exp.category || 'Other', catStyle);
-
-        doc.fillColor(color).font('Helvetica-Bold').fontSize(9).text(`${prefix}$${exp.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 450, y, { width: 80, align: 'right' });
-
+        doc.fillColor(color).font('Helvetica-Bold').fontSize(8.5).text(`${prefix}$${exp.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 450, y, { width: 80, align: 'right' });
         doc.moveTo(50, y + 20).lineTo(550, y + 20).strokeColor(COLORS.border).lineWidth(0.5).stroke();
-        y += 35;
+        y += 30;
     });
 };
 
-const drawFooter = (doc, pageNum) => {
-    const y = 780;
-    doc.moveTo(50, y - 10).lineTo(550, y - 10).strokeColor(COLORS.border).lineWidth(0.5).stroke();
+export const drawFooter = (doc, currentPage, totalPages) => {
+    const y = 775; // Stay within 791.89 threshold (841.89 - 50 margin)
+    doc.save();
+    doc.moveTo(50, y - 5).lineTo(550, y - 5).strokeColor(COLORS.border).lineWidth(0.5).stroke();
     doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text(`Generated on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, 50, y);
-    doc.text(`Page 1 of 1`, 500, y, { align: 'right' });
+    doc.text(`Page ${currentPage} of ${totalPages}`, 500, y, { align: 'right' });
+    doc.restore();
+};
+
+export const addFooters = (doc) => {
+    const range = doc.bufferedPageRange();
+    for (let i = range.start, end = range.start + range.count, rangeCount = range.count; i < end; i++) {
+        doc.switchToPage(i);
+        drawFooter(doc, i + 1, rangeCount);
+    }
 };
 
 // --- Main Controller ---
@@ -247,7 +288,6 @@ export const generateReport = async (req, res) => {
     try {
         const userId = req.userId;
         const { type } = req.body;
-
         if (!userId) return res.sendStatus(401);
 
         const now = new Date();
@@ -276,7 +316,6 @@ export const generateReport = async (req, res) => {
         const user = await User.findById(userId);
         if (!user || !user.email) return res.status(400).send("User email not found");
 
-        // --- Aggregation ---
         const income = expenses.filter(e => e.type === 'credit' || e.type === 'assign').reduce((sum, e) => sum + e.amount, 0);
         const expenseTotal = expenses.filter(e => e.type === 'debit').reduce((sum, e) => sum + e.amount, 0);
         const savings = income - expenseTotal;
@@ -287,8 +326,7 @@ export const generateReport = async (req, res) => {
             categoryData[cat] = (categoryData[cat] || 0) + e.amount;
         });
 
-        // --- PDF Generation ---
-        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
         let buffers = [];
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', async () => {
@@ -309,12 +347,12 @@ export const generateReport = async (req, res) => {
 
         drawHeader(doc, user, startDate, endDate);
         drawSummaryCards(doc, income, expenseTotal, savings);
-
-        drawSpendingTrend(doc, expenses, 50, 285, 250, 180);
+        drawSpendingTrend(doc, expenses, 50, 285, 250, 180, type);
         drawCategoryBreakdown(doc, categoryData, 320, 285, 230, 180);
-
         drawTransactionTable(doc, expenses, 490);
-        drawFooter(doc, 1);
+
+        // Final pass to add footers to all pages
+        addFooters(doc);
 
         doc.end();
 
