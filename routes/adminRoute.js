@@ -1,9 +1,10 @@
 import express from 'express'
-import { assignBalance, deleteUser, edituserExpense, getAllUsers, getUserExpenses, registerUser, removeUserExpense } from '../controllers/adminController.js'
+import { assignBalance, deleteUser, edituserExpense, getAllUsers, getUser, getUserExpenses, registerUser, removeUserExpense } from '../controllers/adminController.js'
 
 const router = express.Router()
 
 router.get('/users', getAllUsers)
+router.get('/user/:userId', getUser)
 router.get('/expenses/:userId', getUserExpenses)
 router.post('/registeruser', registerUser)
 router.delete('/delete/:userId', deleteUser)

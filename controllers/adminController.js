@@ -285,4 +285,18 @@ export const getUserExpenses = async (req, res) => {
     });
 }
 
+export const getUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const user = await User.findById(userId).select('-password -refreshTokens -updatedAt -username -__v -admin -role');
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+        return res.status(200).json(user);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ message: 'Error getting user' });
+    }
+}
+
 
