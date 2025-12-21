@@ -15,6 +15,10 @@ const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 export const signup = async (req, res) => {
     const { name, email, password, role } = req.body;
     if (!name || !email || !password || !role) return res.status(403).send("Please enter all details")
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
+        return res.status(400).send({ "message": "Password does not meet policy requirements" })
+    }
     if (await User.findOne({ email })) {
         return res.status(400).send({ "message": "Email already exists" })
     }

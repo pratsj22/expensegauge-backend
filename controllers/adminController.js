@@ -7,6 +7,10 @@ import Expense from '../models/expenseModel.js'
 export const registerUser = async (req, res) => {
     const { name, email, password } = req.body;
     if (!name || !email || !password) return res.status(403).send("Please enter all details")
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(password)) {
+        return res.status(400).send({ "message": "Password does not meet policy requirements" })
+    }
     if (await User.findOne({ email })) {
         return res.status(400).send({ "message": "Email already exists" })
     }
@@ -91,6 +95,7 @@ export const assignBalance = async (req, res) => {
             details: details,
             amount: parsedAmount,
             type: 'assign',
+            category: 'Added by Admin',
             date,
         });
 

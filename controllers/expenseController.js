@@ -28,7 +28,7 @@ export const addExpense = async (req, res) => {
                 details,
                 amount: parsedAmount,
                 type,
-                category,
+                category: type === 'credit' ? 'Income' : category,
                 date,
             });
 

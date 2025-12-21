@@ -33,7 +33,8 @@ const CATEGORY_STYLES = {
     'Transport': { bg: '#E0E7FF', text: '#3730A3', chart: '#6366F1' }, // Indigo 500
     'Education': { bg: '#FFEDD5', text: '#9A3412', chart: '#F97316' }, // Orange 500
     'Shopping': { bg: '#FCE7F3', text: '#9D174D', chart: '#EC4899' }, // Pink 500
-    'Other': { bg: '#F3F4F6', text: '#374151', chart: '#9CA3AF' }  // Gray 400
+    'Other': { bg: '#F3F4F6', text: '#374151', chart: '#9CA3AF' },  // Gray 400
+    'Added by Admin': { bg: '#EFF6FF', text: '#1E40AF', chart: '#3B82F6' } // Blue 500 (similar to Food & Dining but unique for Admin)
 };
 
 const LOGO_PATH = path.join(process.cwd(), 'assets', 'logo.png');
@@ -112,16 +113,27 @@ export const drawSummaryCards = (doc, income, expense, balance) => {
 };
 
 export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType) => {
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(12).text('Spending Trend', x, y);
-    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text(reportType === 'yearly' ? 'Monthly summary over year' : reportType === 'monthly' ? 'Weekly summary over month' : 'Daily expenses over week', x, y + 15);
-
-    const chartY = y + 40;
-    const chartHeight = height - 40;
-    drawRoundedRect(doc, x, chartY, width, chartHeight, 10, COLORS.white, COLORS.border);
-
     // Dynamic Grouping
     const groupedData = {};
-    expenses.filter(e => e.type === 'debit').forEach(e => {
+    const debits = expenses.filter(e => e.type === 'debit');
+
+    if (debits.length === 0) return false;
+
+    // Pre-populate based on report type
+    let labels = [];
+    if (reportType === 'yearly') {
+        labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    } else if (reportType === 'monthly') {
+        labels = ['W1', 'W2', 'W3', 'W4', 'W5'];
+    } else {
+        // Daily (last 7 days logic usually, but let's be flexible)
+        const days = [...new Set(debits.map(e => new Date(e.date).getDate()))].sort((a, b) => a - b);
+        labels = days.map(d => d.toString());
+    }
+
+    labels.forEach(l => groupedData[l] = 0);
+
+    debits.forEach(e => {
         const date = new Date(e.date);
         let key;
         if (reportType === 'yearly') {
@@ -132,25 +144,21 @@ export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType
         } else {
             key = date.getDate().toString();
         }
-        groupedData[key] = (groupedData[key] || 0) + e.amount;
-    });
-
-    const labels = Object.keys(groupedData).sort((a, b) => {
-        if (reportType === 'yearly') {
-            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-            return months.indexOf(a) - months.indexOf(b);
+        if (groupedData.hasOwnProperty(key)) {
+            groupedData[key] += e.amount;
         }
-        return a.localeCompare(b, undefined, { numeric: true });
     });
 
-    if (labels.length < 2) {
-        doc.fillColor(COLORS.secondary).fontSize(10).text('Insufficient data for trend', x + width / 2 - 60, chartY + chartHeight / 2);
-        return;
-    }
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(12).text('Spending Trend', x, y);
+    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text(reportType === 'yearly' ? 'Monthly summary over year' : reportType === 'monthly' ? 'Weekly summary over month' : 'Daily expenses over week', x, y + 15);
+
+    const chartY = y + 40;
+    const chartHeight = height - 40;
+    drawRoundedRect(doc, x, chartY, width, chartHeight, 10, COLORS.white, COLORS.border);
 
     const values = labels.map(l => groupedData[l]);
     const maxVal = Math.max(...values, 10);
-    const stepX = (width - 40) / (labels.length - 1);
+    const stepX = (width - 40) / (labels.length > 1 ? labels.length - 1 : 1);
 
     doc.save();
     doc.translate(x + 20, chartY + chartHeight - 20);
@@ -162,7 +170,10 @@ export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType
 
     // Area
     doc.moveTo(0, 0);
-    points.forEach(p => doc.lineTo(p.x, p.y));
+    points.forEach((p, i) => {
+        if (i === 0) doc.moveTo(p.x, 0).lineTo(p.x, p.y);
+        else doc.lineTo(p.x, p.y);
+    });
     doc.lineTo(points[points.length - 1].x, 0);
     doc.closePath();
     doc.fillColor(COLORS.balanceBG).fill();
@@ -180,6 +191,7 @@ export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType
     });
 
     doc.restore();
+    return true;
 };
 
 export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) => {
@@ -192,7 +204,7 @@ export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) =>
     const innerRadius = 42;
 
     const total = Object.values(categoryData).reduce((a, b) => a + b, 0);
-    if (total === 0) return;
+    if (total === 0) return false;
 
     let startAngle = 0;
     const sortedCats = Object.entries(categoryData).sort((a, b) => b[1] - a[1]);
@@ -228,10 +240,11 @@ export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) =>
         doc.fillColor(COLORS.secondary).text(`${percentage}%`, x + 230, legendY, { align: 'right', width: 25 });
         legendY += 18;
     });
+    return true;
 };
 
 export const drawTransactionTable = (doc, expenses, startY) => {
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(14).text('Transaction History', 50, startY+10);
+    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(14).text('Transaction History', 50, startY + 10);
     let y = startY + 40;
 
     drawRoundedRect(doc, 50, y, 500, 30, 5, COLORS.bg);
@@ -350,9 +363,15 @@ export const generateReport = async (req, res) => {
 
         drawHeader(doc, user, startDate, endDate);
         drawSummaryCards(doc, income, expenseTotal, savings);
-        drawSpendingTrend(doc, expenses, 50, 285, 250, 180, type);
-        drawCategoryBreakdown(doc, categoryData, 320, 285, 230, 180);
-        drawTransactionTable(doc, expenses, 490);
+
+        let tableStartY = 285;
+        if (expenseTotal > 0) {
+            drawSpendingTrend(doc, expenses, 50, 285, 250, 180, type);
+            drawCategoryBreakdown(doc, categoryData, 320, 285, 230, 180);
+            tableStartY = 490;
+        }
+
+        drawTransactionTable(doc, expenses, tableStartY);
 
         // Final pass to add footers to all pages
         addFooters(doc);
