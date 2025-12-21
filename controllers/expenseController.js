@@ -169,12 +169,15 @@ export const getExpenses = async (req, res) => {
     if (!userId) {
         return res.status(400).json({ message: 'User ID is required' });
     }
+    const user = await User.findById(userId)
+    if (!user) {
+        return res.status(401).json({ message: 'User not found' });
+    }
 
     const expenses = await Expense.find({ userId })
         .sort({ date: -1, createdAt: -1 })
         .skip(offset)
         .limit(limit);
-    const user = await User.findById(userId)
     const totalCount = await Expense.countDocuments({ userId });
     const hasMore = offset + expenses.length < totalCount;
 
