@@ -91,13 +91,13 @@ export const googleAuth = async (req, res) => {
         const payload = ticket.getPayload();
         const email = payload.email;
         const name = payload.name;
-        const picture = payload.picture;
+        // Check for role in request body, default to "user"
+        const requestedRole = req.body.role || "user";
 
         // Find or Create user
         let user = await User.findOne({ email });
 
         if (!user) {
-
             const fakePassword = crypto.randomBytes(32).toString("hex");
             const hashedPassword = await bcrypt.hash(fakePassword, 10);
 
@@ -105,7 +105,7 @@ export const googleAuth = async (req, res) => {
                 name,
                 email,
                 password: hashedPassword, // required by schema
-                role: "user",
+                role: requestedRole,
                 provider: "google",
             });
         }
