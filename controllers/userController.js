@@ -43,7 +43,7 @@ export const signup = async (req, res) => {
     newuser.refreshTokens.push({ token: refreshToken });
     await newuser.save();
 
-    return res.status(200).send({ accessToken, refreshToken, name: newuser.name, role: newuser.role })
+    return res.status(200).send({ accessToken, refreshToken, name: newuser.name, role: newuser.role, profilePicture: newuser.profilePicture })
 }
 
 export const login = async (req, res) => {
@@ -75,7 +75,7 @@ export const login = async (req, res) => {
     }
     await user.save();
 
-    return res.status(200).send({ accessToken, refreshToken, name: user.name, role: user.role })
+    return res.status(200).send({ accessToken, refreshToken, name: user.name, role: user.role, profilePicture: user.profilePicture })
 }
 
 
@@ -111,7 +111,15 @@ export const googleAuth = async (req, res) => {
                 password: hashedPassword, // required by schema
                 role: requestedRole,
                 provider: "google",
+                profilePicture: payload.picture // Saving Google Avatar
             });
+        }
+        else {
+            // Update existing user picture if from google
+            if (user.provider === "google") {
+                user.profilePicture = payload.picture;
+                await user.save();
+            }
         }
 
         // Generate Access Token
@@ -141,6 +149,7 @@ export const googleAuth = async (req, res) => {
             name: user.name,
             email: user.email,
             role: user.role,
+            profilePicture: user.profilePicture
         });
 
     } catch (err) {
@@ -316,6 +325,22 @@ export const changePassword = async (req, res) => {
         return res.status(200).json({ message: 'Password changed successfully' });
     } catch (error) {
         return res.status(500).json({ message: 'Internal server error' });
+    }
+}
+
+export const updateProfile = async (req, res) => {
+    try {
+        const { name } = req.body;
+        const user = await User.findById(req.userId);
+        if (!user) return res.status(404).send({ message: "User not found" });
+
+        if (name) user.name = name;
+        // Future: Handle image upload here if we support manual photo upload
+
+        await user.save();
+        res.status(200).json({ message: "Profile updated successfully", name: user.name, profilePicture: user.profilePicture });
+    } catch (error) {
+        res.status(500).json({ message: "Error updating profile" });
     }
 }
 

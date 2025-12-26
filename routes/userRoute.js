@@ -8,7 +8,8 @@ import {
     resetPassword,
     signup,
     verifyAccess,
-    googleAuth
+    googleAuth,
+    updateProfile
 } from '../controllers/userController.js'
 
 const router = express.Router()
@@ -21,5 +22,6 @@ router.post('/changePassword', verifyAccess, changePassword)
 router.post('/refresh', refresh)
 router.post('/forgotPassword/requestOtp', requestPasswordResetOTP);
 router.post('/forgotPassword/reset', resetPassword);
+router.put('/update-profile', verifyAccess, updateProfile);
 
 export default router
