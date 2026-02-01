@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken'
 import User from '../models/userModel.js'
 import mongoose from 'mongoose'
 import Expense from '../models/expenseModel.js'
+import { invalidateStatsCache } from '../utils/statsCache.js'
 
 export const registerUser = async (req, res) => {
     const { name, email, password } = req.body;
@@ -60,6 +61,7 @@ export const deleteUser = async (req, res) => {
         if (!deletedUser) {
             return res.status(404).json({ message: 'User not found' });
         }
+        invalidateStatsCache(userId);
         res.status(200).json({ message: 'User deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Error deleting user' });
@@ -69,9 +71,6 @@ export const deleteUser = async (req, res) => {
 export const assignBalance = async (req, res) => {
     const { amount, date, details } = req.body;
     const userId = req.params.userId;
-    console.log(userId);
-
-    console.log("enter assign balance");
 
     if (!userId)
         return res.sendStatus(405)
@@ -96,7 +95,7 @@ export const assignBalance = async (req, res) => {
             amount: parsedAmount,
             type: 'assign',
             category: 'Added by Admin',
-            date,
+            date: new Date(date),
         });
 
         await expense.save({ session });
@@ -117,6 +116,7 @@ export const assignBalance = async (req, res) => {
         // Commit transaction
         await session.commitTransaction();
         session.endSession();
+        invalidateStatsCache(userId);
         return res.status(200).send({ "id": expense._id });
     } catch (innerError) {
         await session.abortTransaction();
@@ -205,6 +205,8 @@ export const removeUserExpense = async (req, res) => {
             await session.commitTransaction();
             session.endSession();
 
+            invalidateStatsCache(userId);
+
             return res.sendStatus(200)
         }
         catch (error) {
@@ -243,13 +245,13 @@ export const edituserExpense = async (req, res) => {
                     { $inc: { netBalance: signedAmount } },
                     { session }
                 );
-                console.log("updating", amount);
-
             }
-            await Expense.findByIdAndUpdate(id, { amount, details, date }, { session });
+            await Expense.findByIdAndUpdate(id, { amount, details, date: new Date(date) }, { session });
             // Commit transaction
             await session.commitTransaction();
             session.endSession();
+
+            invalidateStatsCache(userId);
             return res.sendStatus(200)
         } catch (error) {
             await session.abortTransaction();

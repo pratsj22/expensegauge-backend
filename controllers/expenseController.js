@@ -1,5 +1,6 @@
 import Expense from "../models/expenseModel.js";
 import User from "../models/userModel.js";
+import { invalidateStatsCache } from "../utils/statsCache.js";
 
 export const addExpense = async (req, res) => {
     try {
@@ -8,7 +9,6 @@ export const addExpense = async (req, res) => {
         if (!details || !amount || !type || !date) {
             return res.status(403).send("Please provide all the expense details")
         }
-        console.log("inside add expense");
         // Sanitize and convert amount to a number
         const parsedAmount = parseFloat(amount);
         if (isNaN(parsedAmount)) {
@@ -29,7 +29,7 @@ export const addExpense = async (req, res) => {
                 amount: parsedAmount,
                 type,
                 category: type === 'credit' ? 'Income' : category,
-                date,
+                date: new Date(date),
             });
 
             await expense.save({ session });
@@ -53,8 +53,8 @@ export const addExpense = async (req, res) => {
             // Commit transaction
             await session.commitTransaction();
             session.endSession();
-            console.log("Expenseeeses");
 
+            invalidateStatsCache(req.userId);
 
             return res.status(200).send({ "id": expense._id });
         } catch (innerError) {
@@ -98,6 +98,8 @@ export const removeExpense = async (req, res) => {
             // Commit transaction
             await session.commitTransaction();
             session.endSession();
+
+            invalidateStatsCache(req.userId);
 
             return res.sendStatus(200)
         }
@@ -146,10 +148,12 @@ export const editExpense = async (req, res) => {
                     );
                 }
             }
-            await Expense.findByIdAndUpdate(id, { amount, details, category, date }, { session });
+            await Expense.findByIdAndUpdate(id, { amount, details, category, date: new Date(date) }, { session });
             // Commit transaction
             await session.commitTransaction();
             session.endSession();
+
+            invalidateStatsCache(req.userId);
             return res.sendStatus(200)
         } catch (error) {
             await session.abortTransaction();

@@ -37,7 +37,28 @@ const CATEGORY_STYLES = {
     'Added by Admin': { bg: '#EFF6FF', text: '#1E40AF', chart: '#3B82F6' } // Blue 500 (similar to Food & Dining but unique for Admin)
 };
 
-const LOGO_PATH = path.join(process.cwd(), 'assets', 'logo.png');
+const LOGO_PATH = path.join(process.cwd(), 'assets', 'logo.jpg');
+
+const CURRENCY = {
+    locale: 'en-IN',
+    code: 'INR',
+    symbol: '₹'
+};
+
+export const formatCurrency = (amount) => {
+    return new Intl.NumberFormat(CURRENCY.locale, {
+        style: 'currency',
+        currency: CURRENCY.code,
+        minimumFractionDigits: 2
+    }).format(amount);
+};
+
+const FONT_PATH = path.join(process.cwd(), 'assets', 'fonts');
+
+const FONTS = {
+    regular: path.join(FONT_PATH, 'Inter-Regular.ttf'),
+    bold: path.join(FONT_PATH, 'Inter-Bold.ttf')
+};
 
 // --- Helper Functions (Exported for Testing) ---
 
@@ -51,7 +72,7 @@ export const drawRoundedRect = (doc, x, y, width, height, radius, fill, stroke) 
 export const drawPill = (doc, x, y, text, style) => {
     const paddingH = 8;
     const paddingV = 4;
-    doc.font('Helvetica').fontSize(8);
+    doc.font('Regular').fontSize(8);
     const textWidth = doc.widthOfString(text);
     const width = textWidth + (paddingH * 2);
     const height = 16;
@@ -73,20 +94,20 @@ export const drawHeader = (doc, user, startDate, endDate) => {
             console.error('Error drawing logo image:', err);
             // Fallback
             drawRoundedRect(doc, logoX, logoY, 40, 40, 8, '#84CC16');
-            doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(20).text('EG', logoX + 6, logoY + 12);
+            doc.fillColor(COLORS.white).font('Bold').fontSize(20).text('EG', logoX + 6, logoY + 12);
         }
     } else {
         // Fallback Green Square Logo
         drawRoundedRect(doc, logoX, logoY, 40, 40, 8, '#84CC16');
-        doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(20).text('EG', logoX + 6, logoY + 12);
+        doc.fillColor(COLORS.white).font('Bold').fontSize(20).text('EG', logoX + 6, logoY + 12);
     }
 
-    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text('REPORT PERIOD', 400, 45, { align: 'right', width: 150 });
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(11).text(`${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, 400, 58, { align: 'right', width: 150 });
+    doc.fillColor(COLORS.secondary).font('Regular').fontSize(8).text('REPORT PERIOD', 400, 45, { align: 'right', width: 150 });
+    doc.fillColor(COLORS.primary).font('Bold').fontSize(11).text(`${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, 400, 58, { align: 'right', width: 150 });
 
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(28).text('Expense Analysis', 50, 100);
-    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(11).text('Prepared for: ', 50, 135, { continued: true });
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').text(user.name);
+    doc.fillColor(COLORS.primary).font('Bold').fontSize(28).text('Expense Analysis', 50, 100);
+    doc.fillColor(COLORS.secondary).font('Regular').fontSize(11).text('Prepared for: ', 50, 135, { continued: true });
+    doc.fillColor(COLORS.primary).font('Bold').text(user.name);
 
     doc.moveTo(50, 165).lineTo(550, 165).strokeColor(COLORS.border).lineWidth(0.5).stroke();
 };
@@ -98,18 +119,18 @@ export const drawSummaryCards = (doc, income, expense, balance) => {
     const gap = 15;
 
     drawRoundedRect(doc, 50, y, cardWidth, height, 10, COLORS.white, COLORS.border);
-    doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('TOTAL EXPENSES', 75, y + 20);
-    doc.fillColor(COLORS.primary).fontSize(20).font('Helvetica-Bold').text(`$${expense.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 75, y + 38);
+    doc.fillColor(COLORS.secondary).fontSize(8).font('Bold').text('TOTAL EXPENSES', 75, y + 20);
+    doc.fillColor(COLORS.primary).fontSize(20).font('Bold').text(formatCurrency(expense), 75, y + 38);
 
     drawRoundedRect(doc, 50 + cardWidth + gap, y, cardWidth, height, 10, COLORS.white, COLORS.border);
-    doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('TOTAL INCOME', 50 + cardWidth + gap + 25, y + 20);
-    doc.fillColor(COLORS.balance).fontSize(20).font('Helvetica-Bold').text(`$${income.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 50 + cardWidth + gap + 25, y + 38);
+    doc.fillColor(COLORS.secondary).fontSize(8).font('Bold').text('TOTAL INCOME', 50 + cardWidth + gap + 25, y + 20);
+    doc.fillColor(COLORS.balance).fontSize(20).font('Bold').text(formatCurrency(income), 50 + cardWidth + gap + 25, y + 38);
 
     drawRoundedRect(doc, 50 + (cardWidth + gap) * 2, y, cardWidth, height, 10, COLORS.white, COLORS.border);
-    doc.fillColor(COLORS.secondary).fontSize(8).font('Helvetica-Bold').text('NET BALANCE', 50 + (cardWidth + gap) * 2 + 25, y + 20);
+    doc.fillColor(COLORS.secondary).fontSize(8).font('Bold').text('NET BALANCE', 50 + (cardWidth + gap) * 2 + 25, y + 20);
     const balanceColor = balance >= 0 ? COLORS.income : COLORS.expense;
     const balancePrefix = balance >= 0 ? '+' : '';
-    doc.fillColor(balanceColor).fontSize(20).font('Helvetica-Bold').text(`${balancePrefix}$${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 50 + (cardWidth + gap) * 2 + 25, y + 38);
+    doc.fillColor(balanceColor).fontSize(20).font('Bold').text(`${balancePrefix}${formatCurrency(balance)}`, 50 + (cardWidth + gap) * 2 + 25, y + 38);
 };
 
 export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType) => {
@@ -149,8 +170,8 @@ export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType
         }
     });
 
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(12).text('Spending Trend', x, y);
-    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text(reportType === 'yearly' ? 'Monthly summary over year' : reportType === 'monthly' ? 'Weekly summary over month' : 'Daily expenses over week', x, y + 15);
+    doc.fillColor(COLORS.primary).font('Bold').fontSize(12).text('Spending Trend', x, y);
+    doc.fillColor(COLORS.secondary).font('Regular').fontSize(8).text(reportType === 'yearly' ? 'Monthly summary over year' : reportType === 'monthly' ? 'Weekly summary over month' : 'Daily expenses over week', x, y + 15);
 
     const chartY = y + 40;
     const chartHeight = height - 40;
@@ -184,7 +205,7 @@ export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType
     doc.strokeColor(COLORS.balance).lineWidth(1.5).stroke();
 
     // Labels
-    doc.font('Helvetica').fontSize(7).fillColor(COLORS.secondary);
+    doc.font('Regular').fontSize(7).fillColor(COLORS.secondary);
     labels.forEach((l, i) => {
         if (labels.length > 12 && i % 2 !== 0) return; // Sparse labels for large data
         doc.text(l, i * stepX - 10, 5, { width: 20, align: 'center' });
@@ -195,8 +216,8 @@ export const drawSpendingTrend = (doc, expenses, x, y, width, height, reportType
 };
 
 export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) => {
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(12).text('Category Breakdown', x, y);
-    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text('Where your money went', x, y + 15);
+    doc.fillColor(COLORS.primary).font('Bold').fontSize(12).text('Category Breakdown', x, y);
+    doc.fillColor(COLORS.secondary).font('Regular').fontSize(8).text('Where your money went', x, y + 15);
 
     const radius = 55;
     const centerX = x + 65;
@@ -236,7 +257,7 @@ export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) =>
         const percentage = Math.round((amount / total) * 100);
         const style = CATEGORY_STYLES[cat] || CATEGORY_STYLES['Other'];
         doc.circle(x + 145, legendY + 5, 3.5).fill(style.chart);
-        doc.fillColor(COLORS.primary).font('Helvetica').fontSize(8.5).text(cat, x + 158, legendY);
+        doc.fillColor(COLORS.primary).font('Regular').fontSize(8.5).text(cat, x + 158, legendY);
         doc.fillColor(COLORS.secondary).text(`${percentage}%`, x + 230, legendY, { align: 'right', width: 25 });
         legendY += 18;
     });
@@ -244,11 +265,11 @@ export const drawCategoryBreakdown = (doc, categoryData, x, y, width, height) =>
 };
 
 export const drawTransactionTable = (doc, expenses, startY) => {
-    doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(14).text('Transaction History', 50, startY + 10);
+    doc.fillColor(COLORS.primary).font('Bold').fontSize(14).text('Transaction History', 50, startY + 10);
     let y = startY + 40;
 
     drawRoundedRect(doc, 50, y, 500, 30, 5, COLORS.bg);
-    doc.fillColor(COLORS.secondary).font('Helvetica-Bold').fontSize(9);
+    doc.fillColor(COLORS.secondary).font('Bold').fontSize(9);
     doc.text('Date', 70, y + 10);
     doc.text('Description', 160, y + 10);
     doc.text('Category', 340, y + 10);
@@ -260,7 +281,7 @@ export const drawTransactionTable = (doc, expenses, startY) => {
             doc.addPage();
             // Redraw Header for next page
             drawRoundedRect(doc, 50, 50, 500, 30, 5, COLORS.bg);
-            doc.fillColor(COLORS.secondary).font('Helvetica-Bold').fontSize(9);
+            doc.fillColor(COLORS.secondary).font('Bold').fontSize(9);
             doc.text('Date', 70, 60);
             doc.text('Description', 160, 60);
             doc.text('Category', 340, 60);
@@ -272,10 +293,10 @@ export const drawTransactionTable = (doc, expenses, startY) => {
         const prefix = isIncome ? '+' : '-';
         const catStyle = CATEGORY_STYLES[exp.category] || CATEGORY_STYLES['Other'];
 
-        doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8.5).text(new Date(exp.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }), 70, y);
-        doc.fillColor(COLORS.primary).font('Helvetica-Bold').fontSize(8.5).text(exp.details.substring(0, 32), 160, y);
+        doc.fillColor(COLORS.secondary).font('Regular').fontSize(8.5).text(new Date(exp.date).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }), 70, y);
+        doc.fillColor(COLORS.primary).font('Bold').fontSize(8.5).text(exp.details.substring(0, 32), 160, y);
         drawPill(doc, 340, y + 5, exp.category || 'Other', catStyle);
-        doc.fillColor(color).font('Helvetica-Bold').fontSize(8.5).text(`${prefix}$${exp.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 450, y, { width: 80, align: 'right' });
+        doc.fillColor(color).font('Bold').fontSize(8.5).text(`${prefix}${formatCurrency(exp.amount)}`, 450, y, { width: 80, align: 'right' });
         doc.moveTo(50, y + 20).lineTo(550, y + 20).strokeColor(COLORS.border).lineWidth(0.5).stroke();
         y += 35;
     });
@@ -285,7 +306,7 @@ export const drawFooter = (doc, currentPage, totalPages) => {
     const y = 775; // Stay within 791.89 threshold (841.89 - 50 margin)
     doc.save();
     doc.moveTo(50, y - 5).lineTo(550, y - 5).strokeColor(COLORS.border).lineWidth(0.5).stroke();
-    doc.fillColor(COLORS.secondary).font('Helvetica').fontSize(8).text(`Generated on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, 50, y);
+    doc.fillColor(COLORS.secondary).font('Regular').fontSize(8).text(`Generated on ${new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}`, 50, y);
     doc.text(`Page ${currentPage} of ${totalPages}`, 500, y, { align: 'right' });
     doc.restore();
 };
@@ -302,9 +323,24 @@ export const addFooters = (doc) => {
 
 export const generateReport = async (req, res) => {
     try {
-        const userId = req.userId;
-        const { type } = req.body;
-        if (!userId) return res.sendStatus(401);
+        const requesterId = req.userId;
+        const { type, targetUserId } = req.body || {};
+        if (!requesterId) return res.sendStatus(401);
+
+        const requester = await User.findById(requesterId);
+        if (!requester || !requester.email) return res.status(400).send("Requester email not found");
+
+        // Determine whose report we are generating
+        let userIdToReport = requesterId;
+        let isAdminReport = false;
+
+        if (requester.role === 'admin' && targetUserId) {
+            userIdToReport = targetUserId;
+            isAdminReport = true;
+        }
+
+        const reportUser = await User.findById(userIdToReport);
+        if (!reportUser) return res.status(404).send("Target user not found");
 
         const now = new Date();
         let startDate = new Date();
@@ -325,12 +361,9 @@ export const generateReport = async (req, res) => {
         }
 
         const expenses = await Expense.find({
-            userId,
+            userId: userIdToReport,
             date: { $gte: startDate, $lte: endDate }
         }).sort({ date: -1 });
-
-        const user = await User.findById(userId);
-        if (!user || !user.email) return res.status(400).send("User email not found");
 
         const income = expenses.filter(e => e.type === 'credit' || e.type === 'assign').reduce((sum, e) => sum + e.amount, 0);
         const expenseTotal = expenses.filter(e => e.type === 'debit').reduce((sum, e) => sum + e.amount, 0);
@@ -344,15 +377,26 @@ export const generateReport = async (req, res) => {
 
         const doc = new PDFDocument({ margin: 50, size: 'A4', bufferPages: true });
         let buffers = [];
+        doc.registerFont('Regular', FONTS.regular);
+        doc.registerFont('Bold', FONTS.bold);
         doc.on('data', buffers.push.bind(buffers));
         doc.on('end', async () => {
             const pdfData = Buffer.concat(buffers);
             try {
-                await sendEmail({
-                    to: user.email,
-                    subject: `ExpenseGauge Analysis - ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`,
-                    text: `Attached is your detailed expense analysis report.`,
-                    attachments: [{ filename: `Expense_Analysis_${type || 'Report'}.pdf`, content: pdfData }]
+                const subject = isAdminReport
+                    ? `Expense Analysis Report for ${reportUser.name}`
+                    : `Your Expense Analysis Report - ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`;
+
+                const emailText = isAdminReport
+                    ? `Attached is the detailed expense analysis report for ${reportUser.name} (${reportUser.email}), as you requested.`
+                    : `Attached is your detailed expense analysis report.`;
+
+
+                const mailResponse = await sendEmail({
+                    to: requester.email,
+                    subject: subject,
+                    text: emailText,
+                    attachments: [{ filename: `Expense_Analysis_${reportUser.name}_${type || 'Report'}.pdf`, content: pdfData }]
                 });
                 res.status(200).send({ message: "Report sent" });
             } catch (error) {
@@ -361,7 +405,7 @@ export const generateReport = async (req, res) => {
             }
         });
 
-        drawHeader(doc, user, startDate, endDate);
+        drawHeader(doc, reportUser, startDate, endDate);
         drawSummaryCards(doc, income, expenseTotal, savings);
 
         let tableStartY = 285;

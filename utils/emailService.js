@@ -1,53 +1,52 @@
-import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-let resendInstance = null;
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
-const getResendInstance = () => {
-    if (!resendInstance) {
-        if (!process.env.RESEND_API_KEY) {
-            console.warn('RESEND_API_KEY is not defined. Email functionality will be disabled.');
-            return null;
-        }
-        resendInstance = new Resend(process.env.RESEND_API_KEY);
-    }
-    return resendInstance;
-};
-
-/**
- * Send an email using Resend
- * @param {Object} options - Email options
- * @param {string} options.to - Recipient email
- * @param {string} options.subject - Email subject
- * @param {string} [options.text] - Plain text content
- * @param {string} [options.html] - HTML content
- * @param {Array} [options.attachments] - Email attachments
- * @returns {Promise}
- */
 export const sendEmail = async ({ to, subject, text, html, attachments }) => {
-    try {
-        const resend = getResendInstance();
-        if (!resend) {
-            throw new Error('Resend client not initialized. Check RESEND_API_KEY.');
-        }
+    if (!process.env.BREVO_API_KEY) {
+        throw new Error('BREVO_API_KEY is not defined');
+    }
 
-        const data = await resend.emails.send({
-            from: 'ExpenseGauge <onboarding@resend.dev>',
-            to: [to],
-            subject: subject,
-            text: text,
-            html: html,
-            attachments: attachments?.map(att => ({
-                filename: att.filename,
-                content: att.content,
-            })),
+    const payload = {
+        sender: {
+            name: 'ExpenseGauge',
+            email: 'pratsspam22@gmail.com', // works without domain verification
+        },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+        htmlContent: html,
+        attachment: attachments?.map(att => ({
+            name: att.filename,
+            content: Buffer.isBuffer(att.content)
+                ? att.content.toString('base64')
+                : att.content,
+        })),
+    };
+
+    try {
+        const response = await fetch(BREVO_API_URL, {
+            method: 'POST',
+            headers: {
+                'api-key': process.env.BREVO_API_KEY,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+            },
+            body: JSON.stringify(payload),
         });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error('Brevo error response:', data);
+            throw new Error(data.message || 'Failed to send email via Brevo');
+        }
 
         return data;
     } catch (error) {
-        console.error('Error sending email via Resend:', error);
+        console.error('Error sending email via Brevo:', error);
         throw error;
     }
 };

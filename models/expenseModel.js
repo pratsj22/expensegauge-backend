@@ -7,10 +7,15 @@ const expenseSchema = new mongoose.Schema({
   type: {
     type: String,
     required: true,
-    enum: ['credit', 'debit','assign'],
+    enum: ['credit', 'debit', 'assign'],
   },
-  category: { type: String },
-  date: { type: String, required: true },
+  category: {
+    type: String,
+  },
+  date: {
+    type: Date,
+    required: true
+  }
 }, { timestamps: true });
 
 export default mongoose.model('expenses', expenseSchema);
